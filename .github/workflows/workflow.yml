@@ -3,17 +3,19 @@ name: Deploy na VM
 on:
   push:
     branches:
-      - main
+      - main   # troque para main se for o seu padrão
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Se você usa Environments (ex.: production), descomente:
+    # environment: production
     env:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
-      APP_DIR:  tecnoaging-back
-      PM2_APP:  tecnoaging
+      APP_DIR:  tecnoaging-back        # diretório de destino na VM
+      PM2_APP:  tecnoaging-back             # nome do app no PM2
 
     steps:
       - name: 🚀 Checkout do código
@@ -43,14 +45,19 @@ jobs:
 
       - name: 📂 Enviar código para a VM (~/tecnoaging-back)
         run: |
+          # Garante que o diretório existe
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          # Sincroniza (ajuste exclusões conforme seu projeto)
           rsync -avz --delete \
-            --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
             -e "ssh -p ${SSH_PORT:-22}" ./ \
             "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 
-           - name: 🚀 Instalar deps, build e reiniciar (PM2)
+      - name: 🚀 Instalar deps, build e reiniciar (PM2)
         run: |
+          # Injeta APP_DIR e PM2_APP no ambiente remoto; evita TTY interativo e bloqueios
           ssh -p "${SSH_PORT:-22}" \
             -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
@@ -59,8 +66,13 @@ jobs:
             "${SSH_USER}@${SSH_HOST}" "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" << 'EOF'
             set -euo pipefail
 
-            # Garanta Node/NPM no PATH (ajuste se usa nvm)
-            export PATH="$HOME/.nvm/versions/node/$(ls -1 $HOME/.nvm/versions/node 2>/dev/null | tail -n1)/bin:$PATH" || true
+            # Se usar nvm, tenta pôr a versão mais recente no PATH (ignora se não existir)
+            if [ -d "$HOME/.nvm" ]; then
+              export NVM_DIR="$HOME/.nvm"
+              # shellcheck disable=SC1090
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              command -v node >/dev/null 2>&1 || nvm use --lts || true
+            fi
 
             cd ~/"${APP_DIR}"
 
@@ -87,17 +99,18 @@ jobs:
             if [ -f ecosystem.config.js ]; then
               pm2 startOrReload ecosystem.config.js || pm2 start ecosystem.config.js
             else
-              pm2 describe "${PM2_APP}" >/dev/null 2>&1 \
-                && pm2 restart "${PM2_APP}" \
-                || pm2 start dist/main.js --name "${PM2_APP}"
+              if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+                pm2 restart "${PM2_APP}"
+              else
+                pm2 start dist/main.js --name "${PM2_APP}"
+              fi
             fi
 
             pm2 save || true
 
-            # Reiniciar nginx se possível, mas nunca bloquear
+            # Reinicia nginx se possível, mas nunca bloqueia o job
             sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
 
-            # Mostra status e sai explicitamente
             pm2 ls || true
             exit 0
           EOF
