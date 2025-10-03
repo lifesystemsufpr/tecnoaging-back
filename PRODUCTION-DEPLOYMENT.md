@@ -244,6 +244,24 @@ openssl x509 -in /etc/letsencrypt/live/your-domain.com/cert.pem -text -noout | g
 sudo nginx -T | grep -A 20 -B 5 ssl
 ```
 
+#### Self-signed SSL (using public IP)
+
+Use this for testing or when you don't have a domain. Browsers will show a security warning.
+
+```bash
+# Generate and configure self-signed SSL for your VM public IP
+chmod +x scripts/setup-selfsigned-ssl.sh
+./scripts/setup-selfsigned-ssl.sh 20.201.114.238
+
+# Update CORS to use HTTPS with IP
+sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN="https://20.201.114.238"|g' .env || true
+
+# Restart API
+pm2 restart tecno-aging-api
+```
+
+Optional: you can use the reference Nginx file `nginx/tecno-aging-selfsigned.conf` and adjust the IP if needed.
+
 #### SSL Troubleshooting
 ```bash
 # Check SSL configuration
