@@ -49,42 +49,55 @@ jobs:
             -e "ssh -p ${SSH_PORT:-22}" ./ \
             "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 
-      - name: 🚀 Instalar deps, build e reiniciar (PM2)
+           - name: 🚀 Instalar deps, build e reiniciar (PM2)
         run: |
-          # Passa APP_DIR e PM2_APP como variáveis de ambiente para o shell remoto
-          ssh -tt -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+          ssh -p "${SSH_PORT:-22}" \
+            -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o LogLevel=ERROR \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "${SSH_USER}@${SSH_HOST}" "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" << 'EOF'
             set -euo pipefail
 
-            echo "user: $(whoami)  host: $(hostname)"
+            # Garanta Node/NPM no PATH (ajuste se usa nvm)
+            export PATH="$HOME/.nvm/versions/node/$(ls -1 $HOME/.nvm/versions/node 2>/dev/null | tail -n1)/bin:$PATH" || true
+
             cd ~/"${APP_DIR}"
 
-            echo "📦 Instalando dependências..."
+            echo "📦 npm ci (ou install)"
             if command -v npm >/dev/null 2>&1; then
               npm ci || npm install
             else
               echo "npm não encontrado"; exit 1
             fi
 
-            echo "🔨 Buildando (se existir script build)..."
+            echo "🔨 build (se existir)"
             if npm run | grep -qE '\bbuild\b'; then
               npm run build
             else
-              echo "Sem script build; seguindo em frente."
+              echo "Sem script build; seguindo."
             fi
 
-            echo "🚦 PM2..."
+            echo "🚦 PM2"
             if ! command -v pm2 >/dev/null 2>&1; then
               npm install -g pm2
             fi
 
+            # Se existir ecosystem, use-o; senão, suba dist/main.js
             if [ -f ecosystem.config.js ]; then
-              pm2 startOrReload ecosystem.config.js
+              pm2 startOrReload ecosystem.config.js || pm2 start ecosystem.config.js
             else
-              pm2 restart "${PM2_APP}" || pm2 start dist/main.js --name "${PM2_APP}"
+              pm2 describe "${PM2_APP}" >/dev/null 2>&1 \
+                && pm2 restart "${PM2_APP}" \
+                || pm2 start dist/main.js --name "${PM2_APP}"
             fi
 
-            pm2 save
-            sudo -n systemctl restart nginx || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
-          EOF
+            pm2 save || true
 
+            # Reiniciar nginx se possível, mas nunca bloquear
+            sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
+
+            # Mostra status e sai explicitamente
+            pm2 ls || true
+            exit 0
+          EOF
