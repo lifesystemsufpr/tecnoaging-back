@@ -3,16 +3,17 @@ name: Deploy na VM
 on:
   push:
     branches:
-      - main
+      - master   # troque para main se for o seu padrão
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      # Permite definir HOST/USER/PORT como Secrets **ou** Variables do repositório
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
+      APP_DIR:  tecnoaging-back      # <<< diretório de destino na VM
+      PM2_APP:  tecnoaging           # nome do app no PM2 (ajuste se quiser)
 
     steps:
       - name: 🚀 Checkout do código
@@ -33,7 +34,6 @@ jobs:
               echo "::error title=Missing secret/variable::$v está vazio."; exit 1
             fi
           done
-          # Porta opcional
           if [ -z "${SSH_PORT}" ]; then echo "SSH_PORT não definido, usando 22"; fi
 
       - name: 📒 Adicionar host ao known_hosts
@@ -41,21 +41,53 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: 📂 Enviar código para a VM
+      - name: 📂 Enviar código para a VM (~/tecnoaging-back)
         run: |
-          rsync -avz --exclude 'node_modules' --exclude 'dist' \
+          # Garante que o diretório existe
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          # Sincroniza arquivos (ajuste exclusões se necessário)
+          rsync -avz \
+            --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
             -e "ssh -p ${SSH_PORT:-22}" ./ \
-            "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/Cobe-Ale"
+            "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 
-      - name: 🚀 Instalar deps, build e reiniciar
+      - name: 🚀 Instalar deps, build e reiniciar (PM2)
         run: |
-          ssh -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" << 'EOF'
-            set -e
-            cd /home/${SSH_USER}/TecnoAging_web
-            npm ci
-            npm install -g pm2
-            npm run build
-            pm2 restart tecnoaging || pm2 start dist/main.js --name tecnoaging
+          ssh -tt -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" bash -se << 'EOF'
+            set -euo pipefail
+            cd ~/"${APP_DIR}"
+
+            echo "📦 Instalando dependências..."
+            if command -v npm >/dev/null 2>&1; then
+              npm ci || npm install
+            else
+              echo "npm não encontrado"; exit 1
+            fi
+
+            echo "🔨 Buildando (se existir script build)..."
+            if npm run | grep -qE ' build'; then
+              npm run build
+            else
+              echo "Sem script build; seguindo em frente."
+            fi
+
+            echo "🚦 PM2..."
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm install -g pm2
+            fi
+
+            if [ -f ecosystem.config.js ]; then
+              # Usa o ecosystem do próprio diretório do app
+              pm2 startOrReload ecosystem.config.js
+            else
+              # Fallback: tenta dist/main.js
+              pm2 restart "${PM2_APP}" || pm2 start dist/main.js --name "${PM2_APP}"
+            fi
+
             pm2 save
-            sudo systemctl restart nginx
+            sudo -n systemctl restart nginx || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
           EOF
+
