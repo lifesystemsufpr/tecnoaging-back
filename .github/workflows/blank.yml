@@ -45,7 +45,7 @@ jobs:
         run: |
           rsync -avz --exclude 'node_modules' --exclude 'dist' \
             -e "ssh -p ${SSH_PORT:-22}" ./ \
-            "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/TecnoAging_web"
+            "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/Cobe-Ale"
 
       - name: 🚀 Instalar deps, build e reiniciar
         run: |
