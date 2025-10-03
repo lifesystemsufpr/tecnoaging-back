@@ -11,6 +11,9 @@ const appConfig: AppConfig = {
   nest: {
     port: process.env.NEST_PORT ? +process.env.NEST_PORT : 3333,
     environment: process.env.NODE_ENV || 'development',
+    httpsEnabled: process.env.HTTPS_ENABLED === 'true',
+    sslKeyPath: process.env.SSL_KEY_PATH,
+    sslCertPath: process.env.SSL_CERT_PATH,
   },
   swagger: {
     title: process.env.SWAGGER_TITLE || 'tecnoaging-web',

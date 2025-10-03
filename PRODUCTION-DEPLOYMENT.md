@@ -1,115 +1,313 @@
 # Production Deployment Guide
 
-This guide explains how to deploy the TecnoAging NestJS application to production using Docker.
+This guide explains how to deploy the TecnoAging NestJS application to production directly on an Azure VM.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
-- PostgreSQL database (can be provided via docker-compose)
+- Azure VM with Ubuntu 20.04+ or similar Linux distribution
+- Node.js 18+ installed
+- PostgreSQL database (can be on same VM or external)
+- PM2 for process management
+- Nginx for reverse proxy (optional but recommended)
 - Environment variables configured
 
-### 1. Environment Setup
+### 1. VM Setup
 
-Copy the example environment file and configure it for production:
+#### Install Node.js
+```bash
+# Install Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify installation
+node --version
+npm --version
+```
+
+#### Install PM2
+```bash
+sudo npm install -g pm2
+```
+
+#### Install PostgreSQL (if using local database)
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+```
+
+### 2. Application Deployment
+
+#### Clone and Setup
+```bash
+# Clone your repository
+git clone <your-repo-url>
+cd backend
+
+# Install dependencies
+npm install
+
+# Build the application
+npm run build
+```
+
+#### Environment Configuration
+Create `.env` file with your production values:
 
 ```bash
-cp .env.example .env
+cp env.example .env
 ```
 
 Edit `.env` with your values:
-
 - `DATABASE_URL`: Your PostgreSQL connection string
 - `JWT_SECRET`: A secure random string for JWT signing
 - `CORS_ORIGIN`: Your frontend domain
+- `PORT`: Port for the application (default: 3000)
 - Other configuration as needed
 
-### 2. Build and Deploy
+### 3. Database Setup
 
-#### Option A: Using Docker Compose (Recommended)
-
+#### Run Migrations
 ```bash
-# Build and start all services
-docker-compose -f docker-compose.prod.yml up -d
+# Generate Prisma client
+npm run prisma:generate
 
-# View logs
-docker-compose -f docker-compose.prod.yml logs -f api
+# Run database migrations
+npm run migrate:deploy
 
-# Stop services
-docker-compose -f docker-compose.prod.yml down
+# Seed the database (optional)
+npm run prisma:seed
 ```
 
-#### Option B: Using Docker directly
+### 4. Process Management with PM2
 
-```bash
-# Build the image
-docker build -t tecnoaging-api .
+#### Create PM2 Ecosystem File
+Create `ecosystem.config.js`:
 
-# Run with environment file
-docker run -d \
-  --name tecnoaging-api \
-  --env-file .env \
-  -p 3000:3000 \
-  tecnoaging-api
+```javascript
+module.exports = {
+  apps: [{
+    name: 'tecno-aging-api',
+    script: 'dist/main.js',
+    instances: 'max',
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000
+    },
+    error_file: './logs/err.log',
+    out_file: './logs/out.log',
+    log_file: './logs/combined.log',
+    time: true
+  }]
+}
 ```
 
-### 3. Database Migrations
+#### Start Application
+```bash
+# Create logs directory
+mkdir logs
 
-Migrations are automatically run during container startup. The startup script handles:
+# Start with PM2
+pm2 start ecosystem.config.js
 
-- Waiting for database availability
-- Running pending migrations with `prisma migrate deploy`
-- Ensuring Prisma client is generated
+# Save PM2 configuration
+pm2 save
 
-### 4. Health Checks
+# Setup PM2 to start on boot
+pm2 startup
+```
+
+### 5. Nginx Configuration (Optional)
+
+#### Install Nginx
+```bash
+sudo apt install nginx
+```
+
+#### Create Nginx Configuration
+Create `/etc/nginx/sites-available/tecno-aging`:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+#### Enable Site
+```bash
+sudo ln -s /etc/nginx/sites-available/tecno-aging /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 6. Health Checks
 
 The application includes built-in health checks:
 
 - **Endpoint**: `GET /status`
-- **Docker health check**: Automatically configured
 - **Monitoring**: Memory usage (heap and RSS)
+- **PM2 monitoring**: `pm2 monit`
 
-## 🔒 Security Best Practices
+### 7. Security Best Practices
 
-The Dockerfile implements several security best practices:
-
-### ✅ What's Implemented
-
-1. **Non-root user**: Application runs as `nestjs` user (UID 1001)
-2. **Multi-stage build**: Separates build and runtime environments
-3. **Minimal base image**: Uses Alpine Linux for smaller attack surface
-4. **Dependency optimization**: Removes dev dependencies in production
-5. **Health checks**: Built-in application health monitoring
-6. **Resource limits**: Configurable memory and CPU limits
-7. **Proper file permissions**: Files owned by non-root user
-
-### Rolling Updates
-
+#### Firewall Configuration
 ```bash
-# Update with zero downtime
-docker-compose -f docker-compose.prod.yml up -d --no-deps api
+# Allow SSH, HTTP, and HTTPS
+sudo ufw allow ssh
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw enable
 ```
 
-### Common Commands
+#### SSL Certificate (with Let's Encrypt)
+
+**Option 1: Automated Setup (Recommended)**
+```bash
+# Make the SSL setup script executable
+chmod +x scripts/setup-ssl.sh
+
+# Run the SSL setup script
+./scripts/setup-ssl.sh your-domain.com your-email@example.com
+```
+
+**Option 2: Manual Setup**
+```bash
+# Install Certbot
+sudo apt install certbot python3-certbot-nginx
+
+# Create initial Nginx configuration for ACME challenge
+sudo cp nginx/tecno-aging-ssl.conf /etc/nginx/sites-available/tecno-aging-ssl
+sudo sed -i 's/your-domain.com/your-actual-domain.com/g' /etc/nginx/sites-available/tecno-aging-ssl
+
+# Enable the site
+sudo ln -s /etc/nginx/sites-available/tecno-aging-ssl /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Test and reload Nginx
+sudo nginx -t
+sudo systemctl reload nginx
+
+# Get SSL certificate
+sudo certbot --nginx -d your-domain.com
+
+# Setup automatic renewal
+sudo crontab -e
+# Add this line:
+# 0 */12 * * * certbot renew --quiet --post-hook "systemctl reload nginx"
+```
+
+### 8. SSL Configuration and Management
+
+#### Update Environment Variables for HTTPS
+After setting up SSL, update your `.env` file:
 
 ```bash
-# View container logs
-docker-compose -f docker-compose.prod.yml logs -f api
+# Update CORS origin to use HTTPS
+CORS_ORIGIN="https://your-domain.com"
 
-# Execute commands in running container
-docker-compose -f docker-compose.prod.yml exec api sh
+# Optional: Enable direct HTTPS in NestJS (not recommended with Nginx)
+HTTPS_ENABLED=false
+SSL_KEY_PATH=/etc/letsencrypt/live/your-domain.com/privkey.pem
+SSL_CERT_PATH=/etc/letsencrypt/live/your-domain.com/fullchain.pem
+```
 
-# Restart services
-docker-compose -f docker-compose.prod.yml restart api
+#### SSL Certificate Management
+```bash
+# Check certificate status
+sudo certbot certificates
 
-# View container stats
-docker stats
+# Test certificate renewal
+sudo certbot renew --dry-run
+
+# Force certificate renewal
+sudo certbot renew --force-renewal
+
+# Check certificate expiration
+openssl x509 -in /etc/letsencrypt/live/your-domain.com/cert.pem -text -noout | grep "Not After"
+
+# View Nginx SSL configuration
+sudo nginx -T | grep -A 20 -B 5 ssl
+```
+
+#### SSL Troubleshooting
+```bash
+# Check SSL configuration
+sudo nginx -t
+
+# View SSL logs
+sudo tail -f /var/log/nginx/tecno-aging-error.log
+
+# Test SSL connection
+openssl s_client -connect your-domain.com:443 -servername your-domain.com
+
+# Check SSL rating (external tool)
+# Visit: https://www.ssllabs.com/ssltest/analyze.html?d=your-domain.com
+```
+
+### 9. Common Commands
+
+```bash
+# Check application status
+pm2 status
+
+# View logs
+pm2 logs tecno-aging-api
+
+# Restart application
+pm2 restart tecno-aging-api
+
+# Stop application
+pm2 stop tecno-aging-api
+
+# Monitor resources
+pm2 monit
 
 # Check health status
 curl http://localhost:3000/status
+
+# Update application
+git pull
+npm install
+npm run build
+pm2 restart tecno-aging-api
 ```
 
-### Load Balancing
+### 10. Backup and Maintenance
 
-Consider adding a load balancer (nginx, HAProxy) in front of multiple API instances.
+#### Database Backup
+```bash
+# Create backup script
+#!/bin/bash
+pg_dump $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).sql
+```
+
+#### Log Rotation
+```bash
+# Install logrotate
+sudo apt install logrotate
+
+# Create logrotate configuration for PM2 logs
+```
+
+### 11. Monitoring and Alerts
+
+Consider setting up:
+- Application monitoring (New Relic, DataDog, etc.)
+- Server monitoring (Azure Monitor, Nagios, etc.)
+- Log aggregation (ELK Stack, Splunk, etc.)
+- Uptime monitoring (Pingdom, UptimeRobot, etc.)

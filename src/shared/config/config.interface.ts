@@ -8,6 +8,9 @@ export interface AppConfig {
 export interface NestConfig {
   port: number;
   environment: string;
+  httpsEnabled?: boolean;
+  sslKeyPath?: string;
+  sslCertPath?: string;
 }
 
 export interface SecurityConfig {
