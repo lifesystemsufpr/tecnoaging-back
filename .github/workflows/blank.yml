@@ -72,10 +72,10 @@ jobs:
             cd $HOME/TecnoAging_web/backend
             cat > .env <<'EOF'
 NODE_ENV=production
-# Porta do Nest (ajuste se quiser outra)
+
 NEST_PORT=3333
 
-# Auth
+
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=24h
 JWT_REFRESH_EXPIRES_IN=7d
