@@ -1,0 +1,174 @@
+name: Deploy Backend (NestJS + Prisma) to Azure VM
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    env:
+      BACKEND_DIR: backend                   # pasta do backend no repositório
+      REMOTE_APP_DIR: ~/TecnoAging_web       # raiz da app na VM
+      REMOTE_BACKEND_DIR: ~/TecnoAging_web/backend
+      PM2_NAME: tecnoaging_api
+      NODE_VERSION: 'lts/*'                  # usa LTS mais recente
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.AZURE_VM_KEY }}
+
+      - name: known_hosts
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -H ${{ secrets.AZURE_VM_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Preparar diretórios e backup do backend (na VM)
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'VM'
+            set -e
+            mkdir -p ~/TecnoAging_web
+            if [ -d ~/TecnoAging_web/backend ]; then
+              rm -rf ~/TecnoAging_web/backend_backup
+              cp -r ~/TecnoAging_web/backend ~/TecnoAging_web/backend_backup
+              echo "+ Backup do backend criado."
+            else
+              echo "+ Sem backend anterior para backup."
+            fi
+          VM
+
+      - name: Enviar SOMENTE o backend para a VM
+        run: |
+          rsync -avz \
+            --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude '.env*' \
+            -e "ssh" "${{ env.BACKEND_DIR }}/" \
+            ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }}:${{ env.REMOTE_BACKEND_DIR }}/
+
+      - name: Criar .env do backend (com secrets)
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'ENVV'
+            set -e
+            cd $HOME/TecnoAging_web/backend
+            cat > .env <<'EOF'
+NODE_ENV=production
+# Porta do Nest (ajuste se quiser outra)
+NEST_PORT=3333
+
+# Auth
+JWT_SECRET=${JWT_SECRET}
+JWT_EXPIRES_IN=24h
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Prisma
+DATABASE_URL=${DATABASE_URL}
+EOF
+          ENVV
+
+      - name: Garantir Node (nvm) + PM2 na VM
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'SETUP'
+            set -e
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] || curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+            . "$NVM_DIR/nvm.sh"
+            nvm install --lts
+            nvm use --lts
+            node -v
+            npm -v
+            command -v pm2 >/dev/null 2>&1 || npm i -g pm2 --silent --no-progress
+            pm2 -v
+          SETUP
+
+      - name: Instalar deps, Prisma e build (backend)
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'BUILD'
+            set -e
+            . "$HOME/.nvm/nvm.sh"
+            nvm use --lts
+
+            cd $HOME/TecnoAging_web/backend
+
+            # Instalar deps (inclui dev pra compilar)
+            npm ci
+
+            # Prisma (gerar client e aplicar migrações)
+            npx prisma generate
+            # Em produção, use migrate deploy (base já com migrações aplicadas)
+            npx prisma migrate deploy
+
+            # Build do Nest
+            npm run build
+
+            # Manter somente dependências de produção
+            npm ci --omit=dev
+          BUILD
+
+      - name: Subir/reload com PM2 e persistência no reboot
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'PM2'
+            set -e
+            . "$HOME/.nvm/nvm.sh"
+            nvm use --lts
+            cd $HOME/TecnoAging_web/backend
+
+            # Para evitar processos órfãos ao renomear pasta
+            pm2 delete $PM2_NAME 2>/dev/null || true
+
+            # Iniciar app
+            pm2 start dist/main.js --name $PM2_NAME --log-date-format="YYYY-MM-DD HH:mm:ss Z"
+
+            # Tornar persistente
+            sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME >/dev/null 2>&1 || true
+            pm2 save
+          PM2
+
+      - name: Limpar backup após sucesso
+        if: success()
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'CLEAN'
+            set -e
+            rm -rf ~/TecnoAging_web/backend_backup
+            echo "+ Backup antigo removido."
+          CLEAN
+
+      - name: Rollback automático (se falhar)
+        if: failure()
+        run: |
+          echo "❌ Falha no deploy. Iniciando rollback do backend…"
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'RB' || true
+            set -e
+            if [ -d ~/TecnoAging_web/backend_backup ]; then
+              rm -rf ~/TecnoAging_web/backend
+              mv ~/TecnoAging_web/backend_backup ~/TecnoAging_web/backend
+              . "$HOME/.nvm/nvm.sh"
+              nvm use --lts
+              cd ~/TecnoAging_web/backend
+              pm2 restart $PM2_NAME || pm2 start dist/main.js --name $PM2_NAME
+              pm2 save
+              echo "✅ Rollback concluído."
+            else
+              echo "⚠️  Sem backup do backend; intervenção manual pode ser necessária."
+            fi
+          RB
+          exit 1
