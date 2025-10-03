@@ -51,7 +51,7 @@ jobs:
         run: |
           ssh -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" << 'EOF'
             set -e
-            cd /home/${SSH_USER}/tecnoaging
+            cd /home/${SSH_USER}/TecnoAging_web
             npm ci
             npm install -g pm2
             npm run build
