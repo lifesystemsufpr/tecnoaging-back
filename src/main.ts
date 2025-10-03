@@ -9,29 +9,10 @@ import {
   SwaggerConfig,
 } from './shared/config/config.interface';
 import { PrismaClientExceptionFilter } from './shared/filters/prisma-client-exception.filter';
-import * as fs from 'fs';
+ 
 
 async function bootstrap() {
-  const configService = new ConfigService();
-  const nestConfig = configService.getOrThrow<NestConfig>('nest');
-  
-  let httpsOptions = undefined;
-  
-  // Configure HTTPS if enabled and certificates are provided
-  if (nestConfig.httpsEnabled && nestConfig.sslKeyPath && nestConfig.sslCertPath) {
-    try {
-      httpsOptions = {
-        key: fs.readFileSync(nestConfig.sslKeyPath),
-        cert: fs.readFileSync(nestConfig.sslCertPath),
-      };
-      console.log('🔒 HTTPS enabled with SSL certificates');
-    } catch (error) {
-      console.warn('⚠️  HTTPS enabled but SSL certificates not found, falling back to HTTP');
-      httpsOptions = undefined;
-    }
-  }
-  
-  const app = await NestFactory.create(AppModule, { httpsOptions });
+  const app = await NestFactory.create(AppModule);
   const logger = new Logger('AppInitializer');
 
   logger.log('Starting application...');
@@ -45,6 +26,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const appConfigService = app.get(ConfigService);
+  const nestConfig = appConfigService.getOrThrow<NestConfig>('nest');
   const corsConfig = appConfigService.getOrThrow<CorsConfig>('cors');
   const swaggerConfig = appConfigService.getOrThrow<SwaggerConfig>('swagger');
 
