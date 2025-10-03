@@ -1,0 +1,122 @@
+name: Deploy na VM
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
+      APP_DIR:  tecnoaging-back
+      PM2_APP:  tecnoaging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Validar secrets/variáveis
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JWT_SECRET:      ${{ secrets.JWT_SECRET }}
+        run: |
+          set -e
+          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Missing::$v está vazio."; exit 1
+            fi
+          done
+          [ -z "${SSH_PORT}" ] && echo "SSH_PORT não definido, usando 22"
+
+      - name: known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Enviar código (~/tecnoaging-back)
+        run: |
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            -e "ssh -p ${SSH_PORT:-22}" ./ \
+            "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
+
+      - name: Gerar .env no servidor
+        env:
+          DB_URL:  ${{ secrets.DATABASE_URL }}
+          JWT:     ${{ secrets.JWT_SECRET }}
+          APP_ENV: ${{ secrets.NODE_ENV || 'production' }}
+        run: |
+          ssh -p "${SSH_PORT:-22}" \
+            "${SSH_USER}@${SSH_HOST}" \
+            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' APP_ENV='${APP_ENV}' bash -se" << 'EOF'
+            set -euo pipefail
+            cd ~/"${APP_DIR}"
+            cat > .env <<EOT
+            DATABASE_URL=${DB_URL}
+            JWT_SECRET=${JWT}
+            NODE_ENV=${APP_ENV}
+            # PORT=3333
+            EOT
+            chmod 600 .env
+            EOF
+
+      - name: Build e (re)start com PM2
+        run: |
+          ssh -p "${SSH_PORT:-22}" \
+            -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o LogLevel=ERROR \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            "${SSH_USER}@${SSH_HOST}" \
+            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" << 'EOF'
+            set -euo pipefail
+
+            if [ -d "$HOME/.nvm" ]; then
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              command -v node >/dev/null 2>&1 || nvm use --lts || true
+            fi
+
+            cd ~/"${APP_DIR}"
+
+            if command -v npm >/dev/null 2>&1; then
+              npm ci || npm install
+            else
+              echo "npm não encontrado"; exit 1
+            fi
+
+            if npm run | grep -qE '\bbuild\b'; then
+              npm run build
+            fi
+
+            command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+            if [ -f ecosystem.config.js ]; then
+              pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+            else
+              if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+                pm2 restart "${PM2_APP}"
+              else
+                pm2 start dist/main.js --name "${PM2_APP}"
+              fi
+            fi
+
+            pm2 save || true
+            sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
+            pm2 ls || true
+            exit 0
+          EOF

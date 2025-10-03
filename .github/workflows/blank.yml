@@ -1,0 +1,93 @@
+name: Deploy na VM
+
+on:
+  push:
+    branches:
+      - master   # troque para main se for o seu padrão
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
+      APP_DIR:  tecnoaging-back      # <<< diretório de destino na VM
+      PM2_APP:  tecnoaging           # nome do app no PM2 (ajuste se quiser)
+
+    steps:
+      - name: 🚀 Checkout do código
+        uses: actions/checkout@v4
+
+      - name: 🔑 Carregar chave no ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: ✅ Validar segredos/variáveis
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -e
+          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Missing secret/variable::$v está vazio."; exit 1
+            fi
+          done
+          if [ -z "${SSH_PORT}" ]; then echo "SSH_PORT não definido, usando 22"; fi
+
+      - name: 📒 Adicionar host ao known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 📂 Enviar código para a VM (~/tecnoaging-back)
+        run: |
+          # Garante que o diretório existe
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          # Sincroniza arquivos (ajuste exclusões se necessário)
+          rsync -avz \
+            --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            -e "ssh -p ${SSH_PORT:-22}" ./ \
+            "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
+
+      - name: 🚀 Instalar deps, build e reiniciar (PM2)
+        run: |
+          ssh -tt -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" bash -se << 'EOF'
+            set -euo pipefail
+            cd ~/"${APP_DIR}"
+
+            echo "📦 Instalando dependências..."
+            if command -v npm >/dev/null 2>&1; then
+              npm ci || npm install
+            else
+              echo "npm não encontrado"; exit 1
+            fi
+
+            echo "🔨 Buildando (se existir script build)..."
+            if npm run | grep -qE ' build'; then
+              npm run build
+            else
+              echo "Sem script build; seguindo em frente."
+            fi
+
+            echo "🚦 PM2..."
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm install -g pm2
+            fi
+
+            if [ -f ecosystem.config.js ]; then
+              # Usa o ecosystem do próprio diretório do app
+              pm2 startOrReload ecosystem.config.js
+            else
+              # Fallback: tenta dist/main.js
+              pm2 restart "${PM2_APP}" || pm2 start dist/main.js --name "${PM2_APP}"
+            fi
+
+            pm2 save
+            sudo -n systemctl restart nginx || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
+          EOF
+
