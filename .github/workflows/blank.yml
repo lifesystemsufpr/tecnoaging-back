@@ -1,4 +1,4 @@
-name: Deploy na Azure VM
+name: Deploy na VM
 
 on:
   push:
@@ -8,26 +8,50 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      # Permite definir HOST/USER/PORT como Secrets **ou** Variables do repositório
+      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
 
     steps:
       - name: 🚀 Checkout do código
         uses: actions/checkout@v4
 
-      - name: 🔑 Configurar SSH (manual)
+      - name: 🔑 Carregar chave no ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: ✅ Validar segredos/variáveis
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -e
+          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Missing secret/variable::$v está vazio."; exit 1
+            fi
+          done
+          # Porta opcional
+          if [ -z "${SSH_PORT}" ]; then echo "SSH_PORT não definido, usando 22"; fi
+
+      - name: 📒 Adicionar host ao known_hosts
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: 📂 Enviar código para a VM
         run: |
-          rsync -avz --exclude 'node_modules' --exclude 'dist' -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/tecnoaging
+          rsync -avz --exclude 'node_modules' --exclude 'dist' \
+            -e "ssh -p ${SSH_PORT:-22}" ./ \
+            "${SSH_USER}@${SSH_HOST}:/home/${SSH_USER}/tecnoaging"
 
-      - name: 🚀 Instalar dependências, build e reiniciar servidor
+      - name: 🚀 Instalar deps, build e reiniciar
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /home/${{ secrets.SSH_USER }}/tecnoaging
+          ssh -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" << 'EOF'
+            set -e
+            cd /home/${SSH_USER}/tecnoaging
             npm ci
             npm install -g pm2
             npm run build
