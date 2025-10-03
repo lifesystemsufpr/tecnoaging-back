@@ -1,42 +1,37 @@
-name: Deploy no Azure VM
+name: Deploy na Azure VM
 
 on:
   push:
     branches:
-      
-master
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      
-name: 🚀 Checkout do código
-      uses: actions/checkout@v3
+      - name: 🚀 Checkout do código
+        uses: actions/checkout@v4
 
-      
-name: 🔑 Configurar SSH
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: 🔑 Configurar SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      
-name: 📂 Enviar código para a VM
-      run: |
-        rsync -avz --exclude 'node_modules' --exclude 'dist' -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/tecnoaging
+      - name: 📂 Enviar código para a VM
+        run: |
+          rsync -avz --exclude 'node_modules' --exclude 'dist' -e "ssh -i ~/.ssh/id_rsa" ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/${{ secrets.SSH_USER }}/tecnoaging
 
-      
-name: 🚀 Instalar dependências, rodar build e reiniciar servidor
-      run: |
-        ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-          cd /home/${{ secrets.SSH_USER }}/tecnoaging
-          npm install
-          npm install -g pm2  # Garante que o PM2 está instalado
-          npm run build
-          pm2 restart tecnoaging || pm2 start dist/main.js --name tecnoaging
-          pm2 save
-          sudo systemctl restart nginx  # Reinicia o NGINX para garantir que ele redirecione corretamente
-        EOF
+      - name: 🚀 Instalar dependências, build e reiniciar servidor
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd /home/${{ secrets.SSH_USER }}/tecnoaging
+            npm ci
+            npm install -g pm2
+            npm run build
+            pm2 restart tecnoaging || pm2 start dist/main.js --name tecnoaging
+            pm2 save
+            sudo systemctl restart nginx
+          EOF
