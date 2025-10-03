@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  cpf                String              @unique
+  fullName           String
+  password           String
+  updatedAt          DateTime            @updatedAt
+  active             Boolean             @default(true)
+  gender             Gender
+  role               SystemRole
+  phone              String?
+  healthProfessional HealthProfessional?
+  patient            Patient?
+  researcher         Researcher?
+
+  @@map("tecnoAging_user")
+}
+
+model Researcher {
+  id            String      @id @unique
+  email         String      @unique
+  institutionId String
+  updatedAt     DateTime    @updatedAt
+  active        Boolean     @default(true)
+  fieldOfStudy  String
+  user          User        @relation(fields: [id], references: [id])
+  institution   Institution @relation(fields: [institutionId], references: [id])
+
+  @@map("researcher")
+}
+
+model HealthProfessional {
+  id         String       @id @unique
+  email      String       @unique
+  updatedAt  DateTime     @updatedAt
+  active     Boolean      @default(true)
+  speciality String
+  evaluation Evaluation[]
+  user       User         @relation(fields: [id], references: [id])
+
+  @@map("health_professional")
+}
+
+model Institution {
+  id          String       @id @default(uuid())
+  title       String
+  researchers Researcher[]
+
+  @@map("institution")
+}
+
+model Patient {
+  id                   String              @id @unique
+  birthday             DateTime            @db.Date
+  weight               Int
+  height               Int
+  zipCode              String
+  street               String
+  number               String
+  complement           String?
+  city                 String
+  state                String
+  neighborhood         String
+  updatedAt            DateTime            @updatedAt
+  active               Boolean             @default(true)
+  socio_economic_level SocialEconomicLevel
+  scholarship          Scholarship
+  evaluations          Evaluation[]
+  user                 User                @relation(fields: [id], references: [id])
+
+  @@map("patient")
+}
+
+model SensorData {
+  id           String     @id @default(uuid())
+  timestamp    DateTime
+  accel_x      Float
+  accel_y      Float
+  gyro_x       Float
+  gyro_y       Float
+  gyro_z       Float
+  evaluationId String
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+
+  @@map("sensor_data")
+}
+
+model Evaluation {
+  id                   String             @id @default(uuid())
+  patientId            String
+  healthProfessionalId String
+  healthcareUnitId     String
+  date                 DateTime           @db.Date
+  updatedAt            DateTime           @updatedAt
+  type                 TypeEvaluation
+  time_end             DateTime           @db.Timestamp(6)
+  time_init            DateTime           @db.Timestamp(6)
+  healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
+  healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
+  patient              Patient            @relation(fields: [patientId], references: [id])
+  sensorData           SensorData[]
+
+  @@map("evaluation")
+}
+
+model HealthcareUnit {
+  id           String       @id @default(uuid())
+  name         String
+  zipCode      String
+  street       String
+  number       String
+  complement   String?
+  city         String
+  state        String
+  neighborhood String
+  evaluations  Evaluation[]
+
+  @@map("healthcare_unit")
+}
+
+enum SystemRole {
+  MANAGER
+  PATIENT
+  RESEARCHER
+  HEALTH_PROFESSIONAL
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Scholarship {
+  NONE
+  FUNDAMENTAL_INCOMPLETE
+  FUNDAMENTAL_COMPLETE
+  HIGH_SCHOOL_INCOMPLETE
+  HIGH_SCHOOL_COMPLETE
+  HIGHER_EDUCATION_INCOMPLETE
+  HIGHER_EDUCATION_COMPLETE
+  POSTGRADUATE
+  MASTERS
+  DOCTORATE
+}
+
+enum SocialEconomicLevel {
+  A
+  B
+  C
+  D
+}
+
+enum TypeEvaluation {
+  FTSTS
+  TUG
+}
