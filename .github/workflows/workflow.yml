@@ -1,9 +1,9 @@
-name: Deploy TecnoAging
+name: Deploy na VM
 
 on:
   push:
     branches:
-      - main   # troque para main se for o seu padrão
+      - main
 
 jobs:
   deploy:
@@ -12,8 +12,8 @@ jobs:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
-      APP_DIR:  tecnoaging-back      # <<< diretório de destino na VM
-      PM2_APP:  tecnoaging           # nome do app no PM2 (ajuste se quiser)
+      APP_DIR:  tecnoaging-back
+      PM2_APP:  tecnoaging
 
     steps:
       - name: 🚀 Checkout do código
@@ -29,12 +29,12 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -e
-          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER; do
+          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR; do
             if [ -z "${!v}" ]; then
-              echo "::error title=Missing secret/variable::$v está vazio."; exit 1
+              echo "::error title=Missing::$v está vazio."; exit 1
             fi
           done
-          if [ -z "${SSH_PORT}" ]; then echo "SSH_PORT não definido, usando 22"; fi
+          [ -z "${SSH_PORT}" ] && echo "SSH_PORT não definido, usando 22"
 
       - name: 📒 Adicionar host ao known_hosts
         run: |
@@ -43,21 +43,20 @@ jobs:
 
       - name: 📂 Enviar código para a VM (~/tecnoaging-back)
         run: |
-          # Garante que o diretório existe
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
-          # Sincroniza arquivos (ajuste exclusões se necessário)
-          rsync -avz \
-            --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude 'dist' \
+          rsync -avz --delete \
+            --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
             -e "ssh -p ${SSH_PORT:-22}" ./ \
             "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 
       - name: 🚀 Instalar deps, build e reiniciar (PM2)
         run: |
-          ssh -tt -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" bash -se << 'EOF'
+          # Passa APP_DIR e PM2_APP como variáveis de ambiente para o shell remoto
+          ssh -tt -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no \
+            "${SSH_USER}@${SSH_HOST}" "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" << 'EOF'
             set -euo pipefail
+
+            echo "user: $(whoami)  host: $(hostname)"
             cd ~/"${APP_DIR}"
 
             echo "📦 Instalando dependências..."
@@ -68,7 +67,7 @@ jobs:
             fi
 
             echo "🔨 Buildando (se existir script build)..."
-            if npm run | grep -qE ' build'; then
+            if npm run | grep -qE '\bbuild\b'; then
               npm run build
             else
               echo "Sem script build; seguindo em frente."
@@ -80,13 +79,12 @@ jobs:
             fi
 
             if [ -f ecosystem.config.js ]; then
-              # Usa o ecosystem do próprio diretório do app
               pm2 startOrReload ecosystem.config.js
             else
-              # Fallback: tenta dist/main.js
               pm2 restart "${PM2_APP}" || pm2 start dist/main.js --name "${PM2_APP}"
             fi
 
             pm2 save
             sudo -n systemctl restart nginx || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
           EOF
+
