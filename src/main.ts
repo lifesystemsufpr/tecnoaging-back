@@ -56,7 +56,7 @@ async function bootstrap() {
     });
   }
 
-  await app.listen(nestConfig.port);
+  await app.listen(nestConfig.port, '0.0.0.0');
   logger.log(
     `[${nestConfig.environment}] Application is running on: ${await app.getUrl()}`,
   );
