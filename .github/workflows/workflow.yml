@@ -13,13 +13,21 @@ env:
   APP_DIR: tecnoaging-back
   PM2_APP: tecnoaging
   NODE_ENV: production
-  # Porta SSH com fallback
-  SSH_PORT: ${{ vars.SSH_PORT || '22' }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # Torna secrets/vars acessíveis como variáveis de ambiente do shell neste job
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      # Porta pode vir de vars; default 22
+      SSH_PORT: ${{ vars.SSH_PORT || '22' }}
 
     steps:
       - name: Checkout
@@ -28,9 +36,10 @@ jobs:
       - name: Carregar chave SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
       - name: Validar secrets/variáveis
+        shell: bash
         run: |
           set -euo pipefail
           req=(SSH_HOST SSH_USER DATABASE_URL JWT_SECRET)
@@ -45,49 +54,45 @@ jobs:
       - name: Adicionar host à known_hosts
         run: |
           set -euo pipefail
-          ssh-keyscan -p "${{ env.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
 
       - name: Criar pasta do app no servidor
         run: |
           set -euo pipefail
-          ssh -p "${{ env.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "mkdir -p \"$HOME/${{ env.APP_DIR }}\""
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p \"$HOME/$APP_DIR\""
 
       - name: Rsync do código para o servidor
         run: |
           set -euo pipefail
           rsync -az --delete \
             --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
-            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:$HOME/${{ env.APP_DIR }}/" \
-            -e "ssh -p ${{ env.SSH_PORT }}"
+            ./ "$SSH_USER@$SSH_HOST:$HOME/$APP_DIR/" \
+            -e "ssh -p $SSH_PORT"
 
       - name: Gerar .env no servidor
         run: |
           set -euo pipefail
-          ssh -p "${{ env.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "bash -s" << 'EOF'
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -s" << 'EOF'
           set -euo pipefail
-          APP_DIR="$HOME/${{ env.APP_DIR }}"
+          APP_DIR="$HOME/${APP_DIR}"
           cat > "$APP_DIR/.env" <<EENV
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          NODE_ENV=${{ env.NODE_ENV }}
+          DATABASE_URL=${DATABASE_URL}
+          JWT_SECRET=${JWT_SECRET}
+          NODE_ENV=${NODE_ENV}
           EENV
           chmod 600 "$APP_DIR/.env"
           EOF
 
       - name: Build e (re)start com PM2 (idempotente)
-        env:
-          APP_DIR_PATH: ${{ env.APP_DIR }}
-          PM2_APP_NAME: ${{ env.PM2_APP }}
         run: |
           set -euo pipefail
-          ssh -p "${{ env.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "bash -lc '
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -lc '
             set -Eeuo pipefail
 
-            APP_DIR=\"$HOME/${APP_DIR_PATH}\"
+            APP_DIR=\"$HOME/${APP_DIR}\"
             cd \"$APP_DIR\"
 
-            # Habilitar Node via nvm se existir (shell não-interativo não carrega .bashrc)
+            # Habilitar Node via nvm se existir (shell SSH é não-interativo)
             if [ -s \"$HOME/.nvm/nvm.sh\" ]; then
               . \"$HOME/.nvm/nvm.sh\"
               nvm install --lts >/dev/null
@@ -104,10 +109,10 @@ jobs:
             npm run build
 
             # Start/reload
-            if pm2 describe \"${PM2_APP_NAME}\" >/dev/null 2>&1; then
-              pm2 reload \"${PM2_APP_NAME}\"
+            if pm2 describe \"${PM2_APP}\" >/dev/null 2>&1; then
+              pm2 reload \"${PM2_APP}\"
             else
-              pm2 start dist/main.js --name \"${PM2_APP_NAME}\"
+              pm2 start dist/main.js --name \"${PM2_APP}\"
             fi
 
             pm2 save
@@ -116,4 +121,3 @@ jobs:
       # (Opcional) Health check
       # - name: Health check
       #   run: curl -fS https://SEU_HOST/health || (echo "::error::Healthcheck falhou" && exit 1)
-
