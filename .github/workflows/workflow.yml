@@ -58,8 +58,8 @@ jobs:
       - name: Criar pasta do app no servidor
         run: |
           set -euo pipefail
-          # Usar aspas simples para não expandir $HOME no runner
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" 'mkdir -p "$HOME/'"$APP_DIR"'"'
+          # Use \$HOME para expandir apenas no servidor
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p \"\$HOME/$APP_DIR\""
 
       - name: Rsync do código para o servidor
         run: |
@@ -73,6 +73,7 @@ jobs:
       - name: Gerar .env no servidor
         run: |
           set -euo pipefail
+          # Passamos as variáveis como ENV para o processo remoto
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
             "APP_DIR='$APP_DIR' DATABASE_URL='$DATABASE_URL' JWT_SECRET='$JWT_SECRET' NODE_ENV='$NODE_ENV' bash -lc '
               set -euo pipefail
