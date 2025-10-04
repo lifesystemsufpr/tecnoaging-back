@@ -1,4 +1,4 @@
-name: Deploy na VM
+name: Deploy na VM (Azure)
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - main
       - master
 
+# Evita deploys concorrentes por branch/ref
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -13,12 +14,14 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     env:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
       APP_DIR:  tecnoaging-back
       PM2_APP:  tecnoaging
+      NODE_ENV: production
 
     steps:
       - name: Checkout
@@ -48,9 +51,11 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Enviar código (~/tecnoaging-back)
+      - name: Criar pasta do app no servidor
+        run: ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+
+      - name: Enviar código (rsync para ~/APP_DIR)
         run: |
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
           rsync -avz --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -62,23 +67,19 @@ jobs:
         env:
           DB_URL:  ${{ secrets.DATABASE_URL }}
           JWT:     ${{ secrets.JWT_SECRET }}
-          APP_ENV: ${{ secrets.NODE_ENV || 'production' }}
         run: |
-          ssh -p "${SSH_PORT:-22}" \
-            "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' APP_ENV='${APP_ENV}' bash -se" << 'EOF'
-            set -eo pipefail
-            # Garante que APP_DIR está definido no shell remoto
-            : "${APP_DIR:?APP_DIR não definido}"
-            cd ~/"${APP_DIR}"
-            cat > .env <<EOT
-            DATABASE_URL=${DB_URL}
-            JWT_SECRET=${JWT}
-            NODE_ENV=${APP_ENV}
-            # PORT=3333
-            EOT
-            chmod 600 .env
-EOF
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" \
+            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' NODE_ENV='${NODE_ENV}'" \
+            bash -lc '
+              set -e
+              cd "$APP_DIR"
+              printf "%s\n" \
+                "DATABASE_URL=$DB_URL" \
+                "JWT_SECRET=$JWT" \
+                "NODE_ENV=$NODE_ENV" \
+                "# PORT=3333" > .env
+              chmod 600 .env
+            '
 
       - name: Build e (re)start com PM2 (idempotente)
         run: |
@@ -86,46 +87,46 @@ EOF
             -o StrictHostKeyChecking=no -o BatchMode=yes -o LogLevel=ERROR \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" << 'EOF'
-            # -u removido para não quebrar por variáveis não exportadas; validamos manualmente
-            set -eo pipefail
-            : "${APP_DIR:?APP_DIR não definido}"
-            : "${PM2_APP:?PM2_APP não definido}"
+            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' NODE_ENV='${NODE_ENV}'" \
+            bash -lc '
+              set -e
 
-            # nvm/node se existir
-            if [ -d "$HOME/.nvm" ]; then
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              command -v node >/dev/null 2>&1 || nvm use --lts || true
-            fi
-
-            cd ~/"${APP_DIR}"
-
-            # Dependências + build (se existir script)
-            if command -v npm >/dev/null 2>&1; then
-              npm ci || npm install
-            else
-              echo "npm não encontrado"; exit 1
-            fi
-            npm run | grep -qE '\bbuild\b' && npm run build || true
-
-            # PM2
-            command -v pm2 >/dev/null 2>&1 || npm install -g pm2
-
-            if [ -f ecosystem.config.js ]; then
-              # Evita duplicidade (app antigo criado sem ecosystem)
-              pm2 delete "${PM2_APP}" >/dev/null 2>&1 || true
-              pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-            else
-              if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
-                pm2 restart "${PM2_APP}" --update-env
-              else
-                pm2 start dist/main.js --name "${PM2_APP}" --update-env
+              # Ativa NVM se existir (Azure VM comum)
+              if [ -d "$HOME/.nvm" ]; then
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                command -v node >/dev/null 2>&1 || nvm use --lts || true
               fi
-            fi
 
-            pm2 save || true
-            sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
-            pm2 ls || true
-            exit 0
-EOF
+              cd "$APP_DIR"
+
+              # Dependências + build (Nest compila para dist/)
+              command -v npm >/dev/null 2>&1 || { echo "npm não encontrado"; exit 1; }
+              npm ci || npm install
+              npm run | grep -qE "(^| )build( |$)" && npm run build || true
+
+              # PM2
+              command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+              if [ -f ecosystem.config.js ]; then
+                # Evita 2 processos (apaga app antigo iniciado sem ecosystem)
+                pm2 delete "$PM2_APP" >/dev/null 2>&1 || true
+                pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+              else
+                # Mantém 1 único app com nome fixo
+                if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+                  pm2 restart "$PM2_APP" --update-env
+                else
+                  pm2 start dist/main.js --name "$PM2_APP" --update-env
+                fi
+              fi
+
+              # Persistência em reboot (ignora se não tiver sudo NOPASSWD)
+              sudo -n pm2 startup systemd -u "$USER" --hp "$HOME" >/dev/null 2>&1 || true
+              pm2 save || true
+
+              # (Opcional) Nginx se usar proxy reverso
+              sudo -n systemctl restart nginx >/dev/null 2>&1 || true
+
+              pm2 ls || true
+            '
