@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Ajuste estes nomes conforme seu projeto
+  # Ajuste conforme seu projeto
   APP_DIR: tecnoaging-back
   PM2_APP: tecnoaging
   NODE_ENV: production
@@ -19,14 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # Torna secrets/vars acessíveis como variáveis de ambiente do shell neste job
+    # Torna secrets/vars disponíveis como env no shell
     env:
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      # Porta pode vir de vars; default 22
       SSH_PORT: ${{ vars.SSH_PORT || '22' }}
 
     steps:
@@ -59,64 +58,66 @@ jobs:
       - name: Criar pasta do app no servidor
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p \"$HOME/$APP_DIR\""
+          # Usar aspas simples para não expandir $HOME no runner
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" 'mkdir -p "$HOME/'"$APP_DIR"'"'
 
       - name: Rsync do código para o servidor
         run: |
           set -euo pipefail
+          # Escape do $ para expandir no host remoto
           rsync -az --delete \
             --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
-            ./ "$SSH_USER@$SSH_HOST:$HOME/$APP_DIR/" \
+            ./ "$SSH_USER@$SSH_HOST:\$HOME/$APP_DIR/" \
             -e "ssh -p $SSH_PORT"
 
       - name: Gerar .env no servidor
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -s" << 'EOF'
-          set -euo pipefail
-          APP_DIR="$HOME/${APP_DIR}"
-          cat > "$APP_DIR/.env" <<EENV
-          DATABASE_URL=${DATABASE_URL}
-          JWT_SECRET=${JWT_SECRET}
-          NODE_ENV=${NODE_ENV}
-          EENV
-          chmod 600 "$APP_DIR/.env"
-          EOF
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' DATABASE_URL='$DATABASE_URL' JWT_SECRET='$JWT_SECRET' NODE_ENV='$NODE_ENV' bash -lc '
+              set -euo pipefail
+              mkdir -p \"\$HOME/\$APP_DIR\"
+              cat > \"\$HOME/\$APP_DIR/.env\" <<EENV
+DATABASE_URL=\$DATABASE_URL
+JWT_SECRET=\$JWT_SECRET
+NODE_ENV=\$NODE_ENV
+EENV
+              chmod 600 \"\$HOME/\$APP_DIR/.env\"
+            '"
 
       - name: Build e (re)start com PM2 (idempotente)
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -lc '
-            set -Eeuo pipefail
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='$APP_DIR' PM2_APP='$PM2_APP' NODE_ENV='$NODE_ENV' bash -lc '
+              set -Eeuo pipefail
+              cd \"\$HOME/\$APP_DIR\"
 
-            APP_DIR=\"$HOME/${APP_DIR}\"
-            cd \"$APP_DIR\"
+              # Habilitar Node via nvm se existir (shell SSH é não-interativo)
+              if [ -s \"\$HOME/.nvm/nvm.sh\" ]; then
+                . \"\$HOME/.nvm/nvm.sh\"
+                nvm install --lts >/dev/null
+                nvm use --lts >/dev/null
+              fi
 
-            # Habilitar Node via nvm se existir (shell SSH é não-interativo)
-            if [ -s \"$HOME/.nvm/nvm.sh\" ]; then
-              . \"$HOME/.nvm/nvm.sh\"
-              nvm install --lts >/dev/null
-              nvm use --lts >/dev/null
-            fi
+              # Garantir PM2
+              if ! command -v pm2 >/dev/null 2>&1; then
+                npm i -g pm2
+              fi
 
-            # Garantir PM2
-            if ! command -v pm2 >/dev/null 2>&1; then
-              npm i -g pm2
-            fi
+              # Instalar deps e buildar
+              npm ci
+              npm run build
 
-            # Instalar deps e buildar
-            npm ci
-            npm run build
+              # Start/reload idempotente
+              if pm2 describe \"\$PM2_APP\" >/dev/null 2>&1; then
+                pm2 reload \"\$PM2_APP\"
+              else
+                pm2 start dist/main.js --name \"\$PM2_APP\"
+              fi
 
-            # Start/reload
-            if pm2 describe \"${PM2_APP}\" >/dev/null 2>&1; then
-              pm2 reload \"${PM2_APP}\"
-            else
-              pm2 start dist/main.js --name \"${PM2_APP}\"
-            fi
-
-            pm2 save
-          '"
+              pm2 save
+            '"
 
       # (Opcional) Health check
       # - name: Health check
