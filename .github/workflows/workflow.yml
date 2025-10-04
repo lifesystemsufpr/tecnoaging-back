@@ -79,10 +79,10 @@ jobs:
               set -euo pipefail
               mkdir -p \"\$HOME/\$APP_DIR\"
               cat > \"\$HOME/\$APP_DIR/.env\" <<EENV
-DATABASE_URL=\$DATABASE_URL
-JWT_SECRET=\$JWT_SECRET
-NODE_ENV=\$NODE_ENV
-EENV
+              DATABASE_URL=\$DATABASE_URL
+              JWT_SECRET=\$JWT_SECRET
+              NODE_ENV=\$NODE_ENV
+              EENV
               chmod 600 \"\$HOME/\$APP_DIR/.env\"
             '"
 
