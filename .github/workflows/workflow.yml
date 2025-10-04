@@ -2,11 +2,8 @@ name: Deploy na VM (Azure)
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
-# Evita deploys concorrentes por branch/ref
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -14,7 +11,6 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     env:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
@@ -69,17 +65,18 @@ jobs:
           JWT:     ${{ secrets.JWT_SECRET }}
         run: |
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' NODE_ENV='${NODE_ENV}'" \
-            bash -lc '
-              set -e
-              cd "$APP_DIR"
-              printf "%s\n" \
-                "DATABASE_URL=$DB_URL" \
-                "JWT_SECRET=$JWT" \
-                "NODE_ENV=$NODE_ENV" \
-                "# PORT=3333" > .env
-              chmod 600 .env
-            '
+          "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' NODE_ENV='${NODE_ENV}' bash -se" << 'EOF'
+          set -eo pipefail
+          : "${APP_DIR:?APP_DIR não definido}"
+          cd ~/"${APP_DIR}"
+          cat > .env <<EOT
+          DATABASE_URL=${DB_URL}
+          JWT_SECRET=${JWT}
+          NODE_ENV=${NODE_ENV}
+          # PORT=3333
+          EOT
+          chmod 600 .env
+EOF
 
       - name: Build e (re)start com PM2 (idempotente)
         run: |
@@ -87,46 +84,47 @@ jobs:
             -o StrictHostKeyChecking=no -o BatchMode=yes -o LogLevel=ERROR \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' NODE_ENV='${NODE_ENV}'" \
-            bash -lc '
-              set -e
+            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' NODE_ENV='${NODE_ENV}' bash -se" << 'EOF'
+          set -eo pipefail
+          : "${APP_DIR:?APP_DIR não definido}"
+          : "${PM2_APP:?PM2_APP não definido}"
 
-              # Ativa NVM se existir (Azure VM comum)
-              if [ -d "$HOME/.nvm" ]; then
-                export NVM_DIR="$HOME/.nvm"
-                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                command -v node >/dev/null 2>&1 || nvm use --lts || true
-              fi
+          # Node via NVM (se existir)
+          if [ -d "$HOME/.nvm" ]; then
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            command -v node >/dev/null 2>&1 || nvm use --lts || true
+          fi
 
-              cd "$APP_DIR"
+          cd ~/"${APP_DIR}"
 
-              # Dependências + build (Nest compila para dist/)
-              command -v npm >/dev/null 2>&1 || { echo "npm não encontrado"; exit 1; }
-              npm ci || npm install
-              npm run | grep -qE "(^| )build( |$)" && npm run build || true
+          # Dependências + build (NestJS -> dist/)
+          command -v npm >/dev/null 2>&1 || { echo "npm não encontrado"; exit 1; }
+          npm ci || npm install
+          npm run | grep -qE '\bbuild\b' && npm run build || true
 
-              # PM2
-              command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+          # PM2 instalado?
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
-              if [ -f ecosystem.config.js ]; then
-                # Evita 2 processos (apaga app antigo iniciado sem ecosystem)
-                pm2 delete "$PM2_APP" >/dev/null 2>&1 || true
-                pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-              else
-                # Mantém 1 único app com nome fixo
-                if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
-                  pm2 restart "$PM2_APP" --update-env
-                else
-                  pm2 start dist/main.js --name "$PM2_APP" --update-env
-                fi
-              fi
+          if [ -f ecosystem.config.js ]; then
+            # Evita duplicidade: remove app antigo iniciado sem ecosystem
+            pm2 delete "${PM2_APP}" >/dev/null 2>&1 || true
+            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+          else
+            # Mantém 1 único app com nome fixo
+            if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+              pm2 restart "${PM2_APP}" --update-env
+            else
+              pm2 start dist/main.js --name "${PM2_APP}" --update-env
+            fi
+          fi
 
-              # Persistência em reboot (ignora se não tiver sudo NOPASSWD)
-              sudo -n pm2 startup systemd -u "$USER" --hp "$HOME" >/dev/null 2>&1 || true
-              pm2 save || true
+          # Persistência no boot (ignora se sem sudo)
+          sudo -n pm2 startup systemd -u "$USER" --hp "$HOME" >/dev/null 2>&1 || true
+          pm2 save || true
 
-              # (Opcional) Nginx se usar proxy reverso
-              sudo -n systemctl restart nginx >/dev/null 2>&1 || true
+          # (Opcional) Nginx como proxy
+          sudo -n systemctl restart nginx >/dev/null 2>&1 || true
 
-              pm2 ls || true
-            '
+          pm2 ls || true
+EOF
