@@ -1,124 +1,119 @@
 name: Deploy na VM (Azure)
 
-on:
+"on":
   push:
-    branches: [main, master]
+    branches: [ main, master ]
 
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  # Ajuste estes nomes conforme seu projeto
+  APP_DIR: tecnoaging-back
+  PM2_APP: tecnoaging
+  NODE_ENV: production
+  # Porta SSH com fallback
+  SSH_PORT: ${{ vars.SSH_PORT || '22' }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
-      APP_DIR:  tecnoaging-back
-      PM2_APP:  tecnoaging
-      NODE_ENV: production
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: SSH agent
+      - name: Carregar chave SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Validar secrets/variáveis
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
-          JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
-          set -e
-          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
-            if [ -z "${!v}" ]; then
-              echo "::error title=Missing::$v está vazio."; exit 1
+          set -euo pipefail
+          req=(SSH_HOST SSH_USER DATABASE_URL JWT_SECRET)
+          for k in "${req[@]}"; do
+            v="${!k:-}"
+            if [ -z "$v" ]; then
+              echo "::error::Secret/variável '$k' ausente"
+              exit 1
             fi
           done
-          [ -z "${SSH_PORT}" ] && echo "SSH_PORT não definido, usando 22"
 
-      - name: known_hosts
+      - name: Adicionar host à known_hosts
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          set -euo pipefail
+          ssh-keyscan -p "${{ env.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Criar pasta do app no servidor
-        run: ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
-
-      - name: Enviar código (rsync para ~/APP_DIR)
         run: |
-          rsync -avz --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude 'dist' \
-            -e "ssh -p ${SSH_PORT:-22}" ./ \
-            "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
+          set -euo pipefail
+          ssh -p "${{ env.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "mkdir -p \"$HOME/${{ env.APP_DIR }}\""
 
-      - name: Gerar .env no servidor (sem heredoc)
+      - name: Rsync do código para o servidor
+        run: |
+          set -euo pipefail
+          rsync -az --delete \
+            --exclude '.git' --exclude 'node_modules' --exclude 'dist' \
+            ./ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:$HOME/${{ env.APP_DIR }}/" \
+            -e "ssh -p ${{ env.SSH_PORT }}"
+
+      - name: Gerar .env no servidor
+        run: |
+          set -euo pipefail
+          ssh -p "${{ env.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "bash -s" << 'EOF'
+          set -euo pipefail
+          APP_DIR="$HOME/${{ env.APP_DIR }}"
+          cat > "$APP_DIR/.env" <<EENV
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          NODE_ENV=${{ env.NODE_ENV }}
+          EENV
+          chmod 600 "$APP_DIR/.env"
+          EOF
+
+      - name: Build e (re)start com PM2 (idempotente)
         env:
-          DB_URL:  ${{ secrets.DATABASE_URL }}
-          JWT:     ${{ secrets.JWT_SECRET }}
+          APP_DIR_PATH: ${{ env.APP_DIR }}
+          PM2_APP_NAME: ${{ env.PM2_APP }}
         run: |
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' NODE_ENV='${NODE_ENV}'" \
-            bash -lc "set -e; cd \"\$APP_DIR\"; \
-              printf '%s\n' \
-                'DATABASE_URL='\$DB_URL \
-                'JWT_SECRET='\$JWT \
-                'NODE_ENV='\$NODE_ENV \
-                '# PORT=3333' > .env; \
-              chmod 600 .env"
+          set -euo pipefail
+          ssh -p "${{ env.SSH_PORT }}" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "bash -lc '
+            set -Eeuo pipefail
 
-      - name: Build e (re)start com PM2 (idempotente; sem heredoc)
-        run: |
-          ssh -p "${SSH_PORT:-22}" \
-            -o StrictHostKeyChecking=no -o BatchMode=yes -o LogLevel=ERROR \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
-            "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' NODE_ENV='${NODE_ENV}'" \
-            bash -lc "
-              set -e
+            APP_DIR=\"$HOME/${APP_DIR_PATH}\"
+            cd \"$APP_DIR\"
 
-              # nvm/node (se existir)
-              if [ -d \"\$HOME/.nvm\" ]; then
-                export NVM_DIR=\"\$HOME/.nvm\"
-                [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"
-                command -v node >/dev/null 2>&1 || nvm use --lts || true
-              fi
+            # Habilitar Node via nvm se existir (shell não-interativo não carrega .bashrc)
+            if [ -s \"$HOME/.nvm/nvm.sh\" ]; then
+              . \"$HOME/.nvm/nvm.sh\"
+              nvm install --lts >/dev/null
+              nvm use --lts >/dev/null
+            fi
 
-              cd \"\$APP_DIR\"
+            # Garantir PM2
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm i -g pm2
+            fi
 
-              command -v npm >/dev/null 2>&1 || { echo 'npm não encontrado'; exit 1; }
-              npm ci || npm install
+            # Instalar deps e buildar
+            npm ci
+            npm run build
 
-              # NestJS: compila para dist/
-              npm run | grep -qE '(^| )build( |$)' && npm run build || true
+            # Start/reload
+            if pm2 describe \"${PM2_APP_NAME}\" >/dev/null 2>&1; then
+              pm2 reload \"${PM2_APP_NAME}\"
+            else
+              pm2 start dist/main.js --name \"${PM2_APP_NAME}\"
+            fi
 
-              command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+            pm2 save
+          '"
 
-              if [ -f ecosystem.config.js ]; then
-                # Evita duplicidade: remove app antigo criado sem ecosystem
-                pm2 delete \"\$PM2_APP\" >/dev/null 2>&1 || true
-                pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-              else
-                if pm2 describe \"\$PM2_APP\" >/dev/null 2>&1; then
-                  pm2 restart \"\$PM2_APP\" --update-env
-                else
-                  pm2 start dist/main.js --name \"\$PM2_APP\" --update-env
-                fi
-              fi
+      # (Opcional) Health check
+      # - name: Health check
+      #   run: curl -fS https://SEU_HOST/health || (echo "::error::Healthcheck falhou" && exit 1)
 
-              # Persistência no boot (ignora se sem sudo)
-              sudo -n pm2 startup systemd -u \"\$USER\" --hp \"\$HOME\" >/dev/null 2>&1 || true
-              pm2 save || true
-
-              # (Opcional) Nginx como proxy reverso
-              sudo -n systemctl restart nginx >/dev/null 2>&1 || true
-
-              pm2 ls || true
-            "
