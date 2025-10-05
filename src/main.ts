@@ -39,22 +39,31 @@ async function bootstrap() {
 
   if (corsConfig.enabled) {
     logger.log('CORS enabled');
+
+    const allowedOrigins = [
+        ...(Array.isArray(corsConfig.corsOrigins) ? corsConfig.corsOrigins : [corsConfig.corsOrigins]),
+        'http://localhost:3000',
+        'https://equilibrium.giize.com', 
+        'https://tecnoaging-front-black.vercel.app'
+    ];
+
     app.enableCors({
-      origin: [corsConfig.corsOrigins,'http://localhost:3000'],
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-      allowedHeaders: 'Content-Type, Accept, Authorization',
-      credentials: true,
+        origin: allowedOrigins,
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        allowedHeaders: 'Content-Type, Accept, Authorization, Range',
+        credentials: true,
+        exposedHeaders: ['Content-Length', 'Content-Range'],
     });
-  } else {
-    // Se CORS não estiver habilitado no config, use configuração padrão
+} else {
     logger.log('CORS enabled (default)');
     app.enableCors({
-      origin: 'http://localhost:3000',
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-      allowedHeaders: 'Content-Type, Accept, Authorization',
-      credentials: true,
+        origin: 'http://localhost:3000',
+        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+        allowedHeaders: 'Content-Type, Accept, Authorization, Range',
+        credentials: true,
+        exposedHeaders: ['Content-Length', 'Content-Range'],
     });
-  }
+}
 
   await app.listen(nestConfig.port, '0.0.0.0');
   logger.log(
