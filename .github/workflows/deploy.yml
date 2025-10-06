@@ -64,7 +64,7 @@ jobs:
       - name: Criar .env do backend (com secrets)
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: "postgresql://postgresAdm:7A1H4xhp;=@tecnoaging-bd.postgres.database.azure.com:5432/postgres?sslmode=require"
         run: |
           ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'ENVV'
             set -e
