@@ -1,0 +1,311 @@
+name: Deploy TecnoAging Backend to Azure VM
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    env:
+      REMOTE_APP_DIR: ~/tecnoaging-back
+      PM2_NAME: tecnoaging
+      NODE_VERSION: 'lts/*'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.AZURE_VM_KEY }}
+
+      - name: known_hosts
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -H ${{ secrets.AZURE_VM_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Preparar diretórios e backup (na VM)
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'VM'
+            set -e
+            mkdir -p ~/tecnoaging-back
+            if [ -d ~/tecnoaging-back ]; then
+              rm -rf ~/tecnoaging-back_backup
+              cp -r ~/tecnoaging-back ~/tecnoaging-back_backup
+              echo "+ Backup criado."
+            else
+              echo "+ Sem backup anterior."
+            fi
+          VM
+
+      - name: Enviar código para a VM
+        run: |
+          rsync -avz \
+            --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude '.env*' \
+            --exclude '*.log' \
+            -e "ssh" ./ \
+            ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }}:${{ env.REMOTE_APP_DIR }}/
+
+      - name: Criar .env do backend (com secrets)
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'ENVV'
+            set -e
+            cd $HOME/tecnoaging-back
+            cat > .env <<'EOF'
+# Database Configuration
+DATABASE_URL=${DATABASE_URL}
+
+# JWT Configuration
+JWT_SECRET=${JWT_SECRET}
+
+# Application Configuration
+PORT=3333
+NODE_ENV=production
+
+# HTTPS Configuration
+HTTPS_ENABLED=true
+SSL_KEY_PATH=/etc/ssl/private/tecno-aging.key
+SSL_CERT_PATH=/etc/ssl/certs/tecno-aging.crt
+
+# CORS Configuration
+CORS_ORIGIN=https://tecnoaging-front.vercel.app
+
+# API Configuration
+API_PREFIX=backend
+API_VERSION=v1
+
+# Logging Configuration
+LOG_LEVEL=info
+
+# Security Configuration
+BCRYPT_ROUNDS=12
+
+# Swagger Configuration (disabled in production)
+SWAGGER_ENABLED=false
+
+# Health Check Configuration
+HEALTH_CHECK_TIMEOUT=5000
+HEALTH_HEAP_LIMIT_MB=200
+HEALTH_RSS_LIMIT_MB=300
+EOF
+          ENVV
+
+      - name: Garantir Node (nvm) + PM2 na VM
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'SETUP'
+            set -e
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] || curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+            . "$NVM_DIR/nvm.sh"
+            nvm install --lts
+            nvm use --lts
+            node -v
+            npm -v
+            command -v pm2 >/dev/null 2>&1 || npm i -g pm2 --silent --no-progress
+            pm2 -v
+          SETUP
+
+      - name: Instalar deps, Prisma e build
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'BUILD'
+            set -e
+            . "$HOME/.nvm/nvm.sh"
+            nvm use --lts
+
+            cd $HOME/tecnoaging-back
+
+            # Instalar deps (inclui dev pra compilar)
+            npm ci
+
+            # Prisma (gerar client e aplicar migrações)
+            npx prisma generate
+            npx prisma migrate deploy
+
+            # Build do Nest
+            npm run build
+
+            # Manter somente dependências de produção
+            npm ci --omit=dev
+          BUILD
+
+      - name: Configurar HTTPS (se necessário)
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'HTTPS'
+            set -e
+            
+            # Verificar se HTTPS já está configurado
+            if [ ! -f /etc/ssl/certs/tecno-aging.crt ]; then
+              echo "+ Configurando HTTPS..."
+              
+              # Instalar nginx se não estiver instalado
+              if ! command -v nginx >/dev/null 2>&1; then
+                sudo apt update && sudo apt install -y nginx
+              fi
+              
+              # Criar diretórios SSL
+              sudo mkdir -p /etc/ssl/certs /etc/ssl/private
+              sudo chmod 700 /etc/ssl/private
+              
+              # Gerar certificado auto-assinado
+              sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+                -keyout /etc/ssl/private/tecno-aging.key \
+                -out /etc/ssl/certs/tecno-aging.crt \
+                -subj "/C=BR/ST=State/L=City/O=TecnoAging/CN=${{ secrets.AZURE_VM_HOST }}"
+              
+              # Configurar nginx
+              sudo tee /etc/nginx/sites-available/tecno-aging-ssl > /dev/null << 'NGINX'
+server {
+    listen 80;
+    server_name ${{ secrets.AZURE_VM_HOST }};
+    return 301 https://\$server_name\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${{ secrets.AZURE_VM_HOST }};
+
+    ssl_certificate /etc/ssl/certs/tecno-aging.crt;
+    ssl_certificate_key /etc/ssl/private/tecno-aging.key;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # CORS Headers
+    add_header Access-Control-Allow-Origin "https://tecnoaging-front.vercel.app" always;
+    add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With" always;
+    add_header Access-Control-Allow-Credentials "true" always;
+
+    location / {
+        if (\$request_method = 'OPTIONS') {
+            add_header Access-Control-Allow-Origin "https://tecnoaging-front.vercel.app";
+            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS";
+            add_header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With";
+            add_header Access-Control-Allow-Credentials "true";
+            add_header Content-Length 0;
+            return 204;
+        }
+
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+NGINX
+              
+              # Habilitar site
+              sudo ln -sf /etc/nginx/sites-available/tecno-aging-ssl /etc/nginx/sites-enabled/
+              sudo rm -f /etc/nginx/sites-enabled/default
+              
+              # Testar e reiniciar nginx
+              sudo nginx -t && sudo systemctl restart nginx
+              
+              # Configurar firewall
+              sudo ufw allow 80/tcp
+              sudo ufw allow 443/tcp
+              
+              echo "+ HTTPS configurado com sucesso!"
+            else
+              echo "+ HTTPS já está configurado."
+            fi
+          HTTPS
+
+      - name: Subir/reload com PM2
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'PM2'
+            set -e
+            . "$HOME/.nvm/nvm.sh"
+            nvm use --lts
+            cd $HOME/tecnoaging-back
+
+            # Para evitar processos órfãos
+            pm2 delete $PM2_NAME 2>/dev/null || true
+
+            # Iniciar app
+            pm2 start dist/main.js --name $PM2_NAME --log-date-format="YYYY-MM-DD HH:mm:ss Z"
+
+            # Tornar persistente
+            sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u $USER --hp $HOME >/dev/null 2>&1 || true
+            pm2 save
+          PM2
+
+      - name: Testar deployment
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'TEST'
+            set -e
+            
+            # Aguardar aplicação inicializar
+            sleep 5
+            
+            # Testar health check
+            echo "+ Testando health check..."
+            curl -f http://localhost:3000/health || {
+              echo "❌ Health check falhou!"
+              pm2 logs $PM2_NAME --lines 20
+              exit 1
+            }
+            
+            # Testar endpoint de login
+            echo "+ Testando endpoint de login..."
+            curl -f -X POST http://localhost:3000/backend/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"test","password":"test"}' || {
+              echo "⚠️  Endpoint de login retornou erro (esperado com credenciais inválidas)"
+            }
+            
+            echo "+ Testes básicos concluídos!"
+          TEST
+
+      - name: Limpar backup após sucesso
+        if: success()
+        run: |
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'CLEAN'
+            set -e
+            rm -rf ~/tecnoaging-back_backup
+            echo "+ Backup antigo removido."
+          CLEAN
+
+      - name: Rollback automático (se falhar)
+        if: failure()
+        run: |
+          echo "❌ Falha no deploy. Iniciando rollback..."
+          ssh ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'RB' || true
+            set -e
+            if [ -d ~/tecnoaging-back_backup ]; then
+              rm -rf ~/tecnoaging-back
+              mv ~/tecnoaging-back_backup ~/tecnoaging-back
+              . "$HOME/.nvm/nvm.sh"
+              nvm use --lts
+              cd ~/tecnoaging-back
+              pm2 restart $PM2_NAME || pm2 start dist/main.js --name $PM2_NAME
+              pm2 save
+              echo "✅ Rollback concluído."
+            else
+              echo "⚠️  Sem backup; intervenção manual pode ser necessária."
+            fi
+          RB
+          exit 1
