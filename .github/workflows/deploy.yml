@@ -24,6 +24,27 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Validar secrets obrigatórios
+        run: |
+          set -e
+          if [ -z "${{ secrets.AZURE_VM_KEY }}" ]; then
+            echo "::error title=Missing::AZURE_VM_KEY está vazio."
+            exit 1
+          fi
+          if [ -z "${{ secrets.AZURE_VM_HOST }}" ]; then
+            echo "::error title=Missing::AZURE_VM_HOST está vazio."
+            exit 1
+          fi
+          if [ -z "${{ secrets.AZURE_VM_USER }}" ]; then
+            echo "::error title=Missing::AZURE_VM_USER está vazio."
+            exit 1
+          fi
+          if [ -z "${{ secrets.JWT_SECRET }}" ]; then
+            echo "::error title=Missing::JWT_SECRET está vazio."
+            exit 1
+          fi
+          echo "✅ Todos os secrets obrigatórios estão configurados."
+
       - name: SSH key
         uses: webfactory/ssh-agent@v0.9.0
         with:
