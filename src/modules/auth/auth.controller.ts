@@ -16,7 +16,14 @@ export class AuthController {
   @ApiBody({ type: LoginRequest })
   async login(@RequestUser() user) {
     console.log('Usuário validado e anexado ao request:', user);
-    return this.authService.signIn(user);
+    try {
+      const result = await this.authService.signIn(user);
+      console.log('Login successful, token generated');
+      return result;
+    } catch (error) {
+      console.error('Error in login controller:', error);
+      throw error;
+    }
   }
 
   // @Post('change-password')

@@ -17,6 +17,9 @@ async function bootstrap() {
 
   logger.log('Starting application...');
 
+  // Set global prefix
+  app.setGlobalPrefix('backend');
+
   // Validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
@@ -40,19 +43,34 @@ async function bootstrap() {
   if (corsConfig.enabled) {
     logger.log('CORS enabled');
     app.enableCors({
-      origin: [corsConfig.corsOrigins,'http://localhost:3000'],
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-      allowedHeaders: 'Content-Type, Accept, Authorization',
+      origin: [
+        corsConfig.corsOrigins,
+        'http://localhost:3000',
+        'https://localhost:3000',
+        'https://*.vercel.app',
+        'https://tecnoaging-front.vercel.app',
+      ],
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      allowedHeaders: 'Content-Type, Accept, Authorization, X-Requested-With',
       credentials: true,
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
     });
   } else {
     // Se CORS não estiver habilitado no config, use configuração padrão
     logger.log('CORS enabled (default)');
     app.enableCors({
-      origin: 'http://localhost:3000',
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-      allowedHeaders: 'Content-Type, Accept, Authorization',
+      origin: [
+        'http://localhost:3000',
+        'https://localhost:3000',
+        'https://*.vercel.app',
+        'https://tecnoaging-front.vercel.app',
+      ],
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      allowedHeaders: 'Content-Type, Accept, Authorization, X-Requested-With',
       credentials: true,
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
     });
   }
 
