@@ -9,6 +9,7 @@ import { PrismaService } from 'nestjs-prisma';
 import { UserService } from '../users/user.service';
 import { HealthProfessional, Prisma, SystemRole, User } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
+import { QueryDto } from 'src/shared/dto/query.dto';
 
 type HealthProfessionalWithUser = HealthProfessional & { user: User };
 export type HealthProfessionalResponse = Omit<
@@ -69,6 +70,16 @@ export class HealthProfessionalService extends BaseService<
 
       return { ...user, ...healthProfessional };
     });
+  }
+
+  async findAll(queryDto: QueryDto) {
+    const customWhere = {
+      user: {
+        active: true,
+      },
+    };
+
+    return super.findAll(queryDto, customWhere);
   }
 
   async findOne(
@@ -132,14 +143,16 @@ export class HealthProfessionalService extends BaseService<
   }
 
   async remove(id: string) {
+    await this.findOne(id);
     return this.prisma.$transaction(async (tx) => {
-      const healthProfessional = await tx.healthProfessional.delete({
+      await tx.healthProfessional.update({
         where: { id },
+        data: { active: false },
       });
 
-      const user = await this.userService.remove(id, tx);
+      await this.userService.update(id, { active: false }, tx);
 
-      return { ...healthProfessional, ...user };
+      return this.findOne(id, tx);
     });
   }
 }
