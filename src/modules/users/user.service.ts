@@ -27,6 +27,7 @@ export class UserService {
       const user = await prisma.user.create({
         data: {
           ...userData,
+          active: true,
           password: hashedPassword,
         },
       });

@@ -68,10 +68,10 @@ export class CreateUserDto {
   password: string;
 
   @ApiProperty({
-    description: 'User must be active or inactive',
+    description: 'O campo active precisa ser um valor booleano (true ou false)',
     example: 'true',
   })
   @IsBoolean()
-  @IsNotEmpty()
-  active;
+  @IsOptional()
+  active?;
 }
