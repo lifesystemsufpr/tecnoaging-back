@@ -71,6 +71,11 @@ export class UserService {
   ) {
     const prisma = tx || this.prisma;
 
+    if (updateUserDto.password) {
+      const hashedPassword = await hashPassword(updateUserDto.password);
+      updateUserDto.password = hashedPassword;
+    }
+
     return await prisma.user.update({
       where: { id },
       data: updateUserDto,
