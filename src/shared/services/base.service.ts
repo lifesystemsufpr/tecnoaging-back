@@ -28,16 +28,16 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
 
   protected abstract transform(entity: any): TransformedEntity;
 
-  async findAll(queryDto: QueryDto) {
+  async findAll(queryDto: QueryDto, additionalWhere: WhereInput<T> = {}) {
     const { search, page = 1, pageSize = 10 } = queryDto;
 
     const skip = (page - 1) * pageSize;
     const take = pageSize;
 
-    const where: WhereInput<T> = {};
+    const searchWhere: WhereInput<T> = {};
 
     if (search && this.searchableFields.length > 0) {
-      where.OR = this.searchableFields.map((field) => {
+      searchWhere.OR = this.searchableFields.map((field) => {
         if (field.includes('.')) {
           const [relation, relationField] = field.split('.');
           return {
@@ -58,6 +58,9 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
       }) as Array<Record<string, any>>;
     }
 
+    const where: WhereInput<T> = {
+      AND: [searchWhere, additionalWhere],
+    };
     const [data, total] = (await this.prisma.$transaction([
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       (this.model as any).findMany({

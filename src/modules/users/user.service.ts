@@ -27,6 +27,7 @@ export class UserService {
       const user = await prisma.user.create({
         data: {
           ...userData,
+          active: true,
           password: hashedPassword,
         },
       });
@@ -70,6 +71,11 @@ export class UserService {
     tx?: Prisma.TransactionClient,
   ) {
     const prisma = tx || this.prisma;
+
+    if (updateUserDto.password) {
+      const hashedPassword = await hashPassword(updateUserDto.password);
+      updateUserDto.password = hashedPassword;
+    }
 
     return await prisma.user.update({
       where: { id },

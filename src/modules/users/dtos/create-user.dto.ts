@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Gender, SystemRole } from '@prisma/client';
 import {
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -65,4 +66,12 @@ export class CreateUserDto {
   @IsNotEmpty()
   @MinLength(6)
   password: string;
+
+  @ApiProperty({
+    description: 'O campo active precisa ser um valor booleano (true ou false)',
+    example: 'true',
+  })
+  @IsBoolean()
+  @IsOptional()
+  active?;
 }
