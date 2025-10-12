@@ -8,10 +8,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # garante bash em TODOS os steps `run:`
     defaults:
       run:
-        shell: bash   # docs: defaults.run.shell. 
+        shell: bash
 
     env:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
@@ -37,7 +36,6 @@ jobs:
         run: |
           set -euo pipefail
           for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
-            # ${!v:-} evita erro com -u quando a var não existe
             if [[ -z "${!v:-}" ]]; then
               echo "::error title=Missing::$v está vazio."
               exit 1
@@ -86,6 +84,8 @@ jobs:
           HEALTH_RSS_LIMIT_MB=${HEALTH_RSS}
           EOT
           chmod 600 .env
+EOF
+
       - name: Build e (re)start com PM2 (único processo)
         run: |
           set -euo pipefail
@@ -98,7 +98,7 @@ jobs:
             "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" <<'EOF'
           set -euo pipefail
 
-          # nvm (se existir) e Node
+          # habilita nvm/Node, se existir
           if [ -d "$HOME/.nvm" ]; then
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -107,15 +107,27 @@ jobs:
 
           cd ~/"${APP_DIR}"
 
+          # dependências
           if command -v npm >/dev/null 2>&1; then
             npm ci || npm install
           else
             echo "npm não encontrado"; exit 1
           fi
 
-          # só roda build se o script existir
+          # build se existir
           if npm run | grep -qw build; then
-                      else
+            npm run build
+          fi
+
+          # PM2
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+          if [ -f ecosystem.config.js ]; then
+            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+          else
+            if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+              pm2 restart "${PM2_APP}" --update-env
+            else
               pm2 start dist/main.js --name "${PM2_APP}" --update-env
             fi
           fi
@@ -124,13 +136,4 @@ jobs:
           sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
           pm2 ls || true
           exit 0
-          EOF
-            npm run build
-                    fi
-                    command -v pm2 >/dev/null 2>&1 || npm install -g pm2
-                    if [ -f ecosystem.config.js ]; then
-                      pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-                    else
-                      if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
-                        pm2 restart "${PM2_APP}" --update-env
-          
+EOF
