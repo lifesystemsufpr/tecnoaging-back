@@ -10,7 +10,7 @@ jobs:
 
     defaults:
       run:
-        shell: bash
+        shell: bash  # usa bash em todos os steps
 
     env:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
@@ -98,7 +98,7 @@ EOF
             "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" <<'EOF'
           set -euo pipefail
 
-          # habilita nvm/Node, se existir
+          # nvm (se existir) e Node
           if [ -d "$HOME/.nvm" ]; then
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -107,19 +107,17 @@ EOF
 
           cd ~/"${APP_DIR}"
 
-          # dependências
-          if command -v npm >/dev/null 2>&1; then
+          if command -v npm >/voltar/dev/null 2>&1; then
             npm ci || npm install
           else
             echo "npm não encontrado"; exit 1
           fi
 
-          # build se existir
+          # só roda build se o script existir
           if npm run | grep -qw build; then
             npm run build
           fi
 
-          # PM2
           command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
           if [ -f ecosystem.config.js ]; then
