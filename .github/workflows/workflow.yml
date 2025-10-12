@@ -117,17 +117,7 @@ EOF
 
           # só roda build se o script existir
           if npm run | grep -qw build; then
-            npm run build
-          fi
-
-          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
-
-          if [ -f ecosystem.config.js ]; then
-            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-          else
-            if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
-              pm2 restart "${PM2_APP}" --update-env
-            else
+                      else
               pm2 start dist/main.js --name "${PM2_APP}" --update-env
             fi
           fi
@@ -137,3 +127,14 @@ EOF
           pm2 ls || true
           exit 0
 EOF
+  npm run build
+          fi
+
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+          if [ -f ecosystem.config.js ]; then
+            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+          else
+            if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+              pm2 restart "${PM2_APP}" --update-env
+
