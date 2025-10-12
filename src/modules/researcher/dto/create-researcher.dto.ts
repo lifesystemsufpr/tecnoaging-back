@@ -25,10 +25,10 @@ export class CreateResearcherDto {
   @ApiProperty({
     description: 'The field of study of the researcher',
     example: 'Gerontologia',
+    required: false,
   })
-  @IsNotEmpty()
   @IsString()
-  fieldOfStudy: string;
+  fieldOfStudy?: string;
 
   @ApiProperty({
     description: 'The ID of the institution the researcher is affiliated with',

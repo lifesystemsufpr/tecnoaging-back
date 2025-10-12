@@ -30,7 +30,7 @@ model Researcher {
   institutionId String
   updatedAt     DateTime    @updatedAt
   active        Boolean     @default(true)
-  fieldOfStudy  String
+  fieldOfStudy  String?
   user          User        @relation(fields: [id], references: [id])
   institution   Institution @relation(fields: [institutionId], references: [id])
 
@@ -162,4 +162,5 @@ enum SocialEconomicLevel {
 enum TypeEvaluation {
   FTSTS
   TUG
+  SSTS_30
 }
