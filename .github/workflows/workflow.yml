@@ -8,10 +8,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    # garante bash em todos os `run:`
+    # garante bash em TODOS os steps `run:`
     defaults:
       run:
-        shell: bash
+        shell: bash   # docs: defaults.run.shell. 
 
     env:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
-            # ${!v:-} evita erro com -u se a var não existir
+            # ${!v:-} evita erro com -u quando a var não existe
             if [[ -z "${!v:-}" ]]; then
               echo "::error title=Missing::$v está vazio."
               exit 1
@@ -47,6 +47,7 @@ jobs:
 
       - name: known_hosts
         run: |
+          set -e
           mkdir -p ~/.ssh
           ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
@@ -63,73 +64,76 @@ jobs:
 
       - name: Gerar .env no servidor
         env:
-          DB_URL:    ${{ secrets.DATABASE_URL }}
-          JWT:       ${{ secrets.JWT_SECRET }}
-          APP_ENV:   ${{ secrets.NODE_ENV || 'production' }}
-          NEST_PORT: 3333
+          DB_URL:      ${{ secrets.DATABASE_URL }}
+          JWT:         ${{ secrets.JWT_SECRET }}
+          APP_ENV:     ${{ secrets.NODE_ENV || 'production' }}
+          NEST_PORT:   3333
           HEALTH_HEAP: 200
-          HEALTH_RSS: 300
+          HEALTH_RSS:  300
         run: |
+          set -euo pipefail
           ssh -p "${SSH_PORT:-22}" \
             "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' APP_ENV='${APP_ENV}' NEST_PORT='${NEST_PORT}' HEALTH_HEAP='${HEALTH_HEAP}' HEALTH_RSS='${HEALTH_RSS}' bash -se" << 'EOF'
-            set -euo pipefail
-            cd ~/"${APP_DIR}"
-            cat > .env <<EOT
-            DATABASE_URL=${DB_URL}
-            JWT_SECRET=${JWT}
-            NODE_ENV=${APP_ENV}
-            NEST_PORT=${NEST_PORT}
-            HEALTH_HEAP_LIMIT_MB=${HEALTH_HEAP}
-            HEALTH_RSS_LIMIT_MB=${HEALTH_RSS}
-            EOT
-            chmod 600 .env
+            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' APP_ENV='${APP_ENV}' NEST_PORT='${NEST_PORT}' HEALTH_HEAP='${HEALTH_HEAP}' HEALTH_RSS='${HEALTH_RSS}' bash -se" <<'EOF'
+          set -euo pipefail
+          cd ~/"${APP_DIR}"
+          cat > .env <<EOT
+          DATABASE_URL=${DB_URL}
+          JWT_SECRET=${JWT}
+          NODE_ENV=${APP_ENV}
+          NEST_PORT=${NEST_PORT}
+          HEALTH_HEAP_LIMIT_MB=${HEALTH_HEAP}
+          HEALTH_RSS_LIMIT_MB=${HEALTH_RSS}
+          EOT
+          chmod 600 .env
 EOF
 
       - name: Build e (re)start com PM2 (único processo)
         run: |
+          set -euo pipefail
           ssh -p "${SSH_PORT:-22}" \
             -o StrictHostKeyChecking=no \
             -o BatchMode=yes \
             -o LogLevel=ERROR \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" << 'EOF'
-            set -euo pipefail
+            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" <<'EOF'
+          set -euo pipefail
 
-            # nvm (se existir) e Node
-            if [ -d "$HOME/.nvm" ]; then
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              command -v node >/dev/null 2>&1 || nvm use --lts || true
-            fi
+          # nvm (se existir) e Node
+          if [ -d "$HOME/.nvm" ]; then
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            command -v node >/dev/null 2>&1 || nvm use --lts || true
+          fi
 
-            cd ~/"${APP_DIR}"
+          cd ~/"${APP_DIR}"
 
-            if command -v npm >/dev/null 2>&1; then
-              npm ci || npm install
+          if command -v npm >/dev/null 2>&1; then
+            npm ci || npm install
+          else
+            echo "npm não encontrado"; exit 1
+          fi
+
+          # só roda build se o script existir
+          if npm run | grep -qw build; then
+            npm run build
+          fi
+
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+          if [ -f ecosystem.config.js ]; then
+            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+          else
+            if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+              pm2 restart "${PM2_APP}" --update-env
             else
-              echo "npm não encontrado"; exit 1
+              pm2 start dist/main.js --name "${PM2_APP}" --update-env
             fi
+          fi
 
-            if npm run | grep -qE '\bbuild\b'; then
-              npm run build
-            fi
-
-            command -v pm2 >/dev/null 2>&1 || npm install -g pm2
-
-            if [ -f ecosystem.config.js ]; then
-              pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-            else
-              if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
-                pm2 restart "${PM2_APP}" --update-env
-              else
-                pm2 start dist/main.js --name "${PM2_APP}" --update-env
-              fi
-            fi
-
-            pm2 save || true
-            sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
-            pm2 ls || true
-            exit 0
+          pm2 save || true
+          sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
+          pm2 ls || true
+          exit 0
 EOF
