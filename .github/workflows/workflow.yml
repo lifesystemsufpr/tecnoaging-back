@@ -84,8 +84,7 @@ jobs:
           HEALTH_RSS_LIMIT_MB=${HEALTH_RSS}
           EOT
           chmod 600 .env
-EOF
-
+          
       - name: Build e (re)start com PM2 (único processo)
         run: |
           set -euo pipefail
@@ -134,4 +133,3 @@ EOF
           sudo -n systemctl restart nginx 2>/dev/null || echo "nginx não reiniciado (sem sudo NOPASSWD?)"
           pm2 ls || true
           exit 0
-EOF
