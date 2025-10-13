@@ -28,16 +28,11 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    
       - name: Validar secrets/variáveis
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
-          SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
-          APP_DIR: tecnoaging-back
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
           set -euo pipefail
           for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
