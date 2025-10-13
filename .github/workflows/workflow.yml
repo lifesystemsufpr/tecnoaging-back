@@ -28,6 +28,23 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      - name: Debug secrets (apenas comprimento/presença)
+        run: |
+          echo "=== Verificando secrets ==="
+          [[ -n "$SSH_HOST" ]] && echo "✓ SSH_HOST definido (${#SSH_HOST} chars)" || echo "✗ SSH_HOST VAZIO"
+          [[ -n "$SSH_USER" ]] && echo "✓ SSH_USER definido (${#SSH_USER} chars)" || echo "✗ SSH_USER VAZIO"
+          [[ -n "$SSH_PORT" ]] && echo "✓ SSH_PORT definido (${#SSH_PORT} chars)" || echo "✗ SSH_PORT VAZIO"
+          [[ -n "$SSH_PRIVATE_KEY" ]] && echo "✓ SSH_PRIVATE_KEY definido (${#SSH_PRIVATE_KEY} chars)" || echo "✗ SSH_PRIVATE_KEY VAZIO"
+          [[ -n "$DATABASE_URL" ]] && echo "✓ DATABASE_URL definido (${#DATABASE_URL} chars)" || echo "✗ DATABASE_URL VAZIO"
+          [[ -n "$JWT_SECRET" ]] && echo "✓ JWT_SECRET definido (${#JWT_SECRET} chars)" || echo "✗ JWT_SECRET VAZIO"
+        env:
+         SSH_HOST: ${{ secrets.SSH_HOST }}
+         SSH_USER: ${{ secrets.SSH_USER }}
+         SSH_PORT: ${{ secrets.SSH_PORT }}
+         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+         DATABASE_URL: ${{ secrets.DATABASE_URL }}
+         JWT_SECRET: ${{ secrets.JWT_SECRET }}   
+
       - name: Validar secrets/variáveis
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
