@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
             if [[ -z "${!v:-}" ]]; then
-              echo "::error title=Missing::$v está vazio."
+              echo "::error title=Missing::$v::está vazio."
               exit 1
             fi
           done
