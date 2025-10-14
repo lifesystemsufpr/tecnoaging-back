@@ -42,7 +42,9 @@ jobs:
               exit 1
             fi
           done
-          [[ -z "${SSH_PORT:-}" ]] && echo "SSH_PORT não definido, usando 22" || true
+          if [[ -z "${SSH_PORT:-}" ]]; then
+            echo "SSH_PORT não definido, usando 22"
+          fi
 
       - name: known_hosts
         run: |
