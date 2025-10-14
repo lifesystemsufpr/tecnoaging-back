@@ -33,9 +33,6 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JWT_SECRET:      ${{ secrets.JWT_SECRET }}
-          SSH_HOST:        ${{ env.SSH_HOST }}
-          SSH_USER:        ${{ env.SSH_USER }}
-          APP_DIR:         ${{ env.APP_DIR }}
         run: |
           set -euo pipefail
           for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
