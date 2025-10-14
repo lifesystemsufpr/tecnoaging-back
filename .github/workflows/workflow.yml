@@ -17,7 +17,7 @@ jobs:
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
       APP_DIR:  tecnoaging-back
-      PM2_APP:  tecnoaging
+      PM2_APP:  TecnoAging-api
 
     steps:
       - name: Checkout

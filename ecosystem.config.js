@@ -1,6 +1,6 @@
 module.exports = {
   apps: [{
-    name: 'tecno-aging-api',
+    name: 'TecnoAging-api',
     script: 'dist/main.js',
     instances: 'max',
     exec_mode: 'cluster',
