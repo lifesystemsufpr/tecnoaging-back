@@ -35,26 +35,15 @@ jobs:
           JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
           set -euo pipefail
-
-          MISSING_VARS=()
-    
+          
           for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
             if [[ -z "${!v:-}" ]]; then
-              MISSING_VARS+=("$v")
-              echo "::warning title=Variável Vazia::$v está vazio ou não definido."
+              echo "::error title=Missing::$v está vazio."
+              exit 1
             fi
           done
-    
-          if [[ ${#MISSING_VARS[@]} -gt 0 ]]; then
-            echo "⚠️  Atenção: ${#MISSING_VARS[@]} variável(is) vazia(s): ${MISSING_VARS[*]}"
-            echo "O deploy pode falhar se essas variáveis forem necessárias."
-          else
-            echo "✅ Todas as variáveis obrigatórias estão definidas."
-          fi
-    
-          [[ -z "${SSH_PORT:-}" ]] && echo "SSH_PORT não definido, usando 22"
+          [[ -z "${SSH_PORT:-}" ]] && echo "SSH_PORT não definido, usando 22" || true
 
-          
       - name: known_hosts
         run: |
           set -e
