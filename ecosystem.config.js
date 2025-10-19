@@ -2,7 +2,7 @@ module.exports = {
   apps: [{
     name: 'TecnoAging-api',
     script: 'dist/main.js',
-    instances: 'max',
+    instances: '1',
     exec_mode: 'cluster',
     env: {
       NODE_ENV: 'production',
