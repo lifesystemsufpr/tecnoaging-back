@@ -67,17 +67,18 @@ jobs:
         run: |
           set -euo pipefail
     
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" bash -s <<ENDSSH
-          cat > ~/tecnoaging-back/.env <<'ENDENV'
+          cat > /tmp/.env <<EOF
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           NODE_ENV=${{ secrets.NODE_ENV || 'production' }}
           NEST_PORT=3333
           HEALTH_HEAP_LIMIT_MB=200
           HEALTH_RSS_LIMIT_MB=300
-          ENDENV
-          chmod 600 ~/tecnoaging-back/.env
-          ENDSSH
+          EOF
+    
+          scp -P "${SSH_PORT:-22}" /tmp/.env "${SSH_USER}@${SSH_HOST}:${APP_DIR}/.env"
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "chmod 600 ${APP_DIR}/.env"
+          rm -f /tmp/.env
      
             
           
