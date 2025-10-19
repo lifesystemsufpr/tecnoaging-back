@@ -64,29 +64,23 @@ jobs:
             "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 
       - name: Gerar .env no servidor
-        env:
-          DB_URL:      ${{ secrets.DATABASE_URL }}
-          JWT:         ${{ secrets.JWT_SECRET }}
-          APP_ENV:     ${{ secrets.NODE_ENV || 'production' }}
-          NEST_PORT:   3333
-          HEALTH_HEAP: 200
-          HEALTH_RSS:  300
         run: |
           set -euo pipefail
-          ssh -p "${SSH_PORT:-22}" \
-            "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' DB_URL='${DB_URL}' JWT='${JWT}' APP_ENV='${APP_ENV}' NEST_PORT='${NEST_PORT}' HEALTH_HEAP='${HEALTH_HEAP}' HEALTH_RSS='${HEALTH_RSS}' bash -se" <<'EOF'
-          set -euo pipefail
-          cd ~/"${APP_DIR}"
-          cat > .env <<EOT
-          DATABASE_URL=${DB_URL}
-          JWT_SECRET=${JWT}
-          NODE_ENV=${APP_ENV}
-          NEST_PORT=${NEST_PORT}
-          HEALTH_HEAP_LIMIT_MB=${HEALTH_HEAP}
-          HEALTH_RSS_LIMIT_MB=${HEALTH_RSS}
-          EOT
-          chmod 600 .env
+    
+          # Criar .env localmente com secrets interpolados
+          cat > /tmp/.env <<'EOF'
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          NODE_ENV=${{ secrets.NODE_ENV || 'production' }}
+          NEST_PORT=3333
+          HEALTH_HEAP_LIMIT_MB=200
+          HEALTH_RSS_LIMIT_MB=300
+          EOF
+    
+          # Enviar para servidor
+          scp -P "${SSH_PORT:-22}" /tmp/.env "${SSH_USER}@${SSH_HOST}:${APP_DIR}/.env"
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "chmod 600 ${APP_DIR}/.env"
+          rm -f /tmp/.env
           
       - name: Build e (re)start com PM2 (único processo)
         run: |
