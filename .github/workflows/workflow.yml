@@ -67,14 +67,16 @@ jobs:
         run: |
           set -euo pipefail
     
-          cat > /tmp/.env <<'EOF'
-          DATABASE_URL=${{ secrets.DATABASE_URL }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          NODE_ENV=${{ secrets.NODE_ENV || 'production' }}
-          NEST_PORT=3333
-          HEALTH_HEAP_LIMIT_MB=200
-          HEALTH_RSS_LIMIT_MB=300
-          EOF
+          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
+    
+          {
+          echo "DATABASE_URL=${DB_URL}"
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
+          echo "NODE_ENV=${{ secrets.NODE_ENV || 'production' }}"
+          echo "NEST_PORT=3333"
+          echo "HEALTH_HEAP_LIMIT_MB=200"
+          echo "HEALTH_RSS_LIMIT_MB=300"
+          } > /tmp/.env
     
           scp -P "${SSH_PORT:-22}" /tmp/.env "${SSH_USER}@${SSH_HOST}:${APP_DIR}/.env"
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "chmod 600 ${APP_DIR}/.env"
