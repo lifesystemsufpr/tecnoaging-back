@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
     
-          cat > /tmp/.env <<EOF
+          cat > /tmp/.env <<'EOF'
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           NODE_ENV=${{ secrets.NODE_ENV || 'production' }}
