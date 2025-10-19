@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
     
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" bash -s <<'ENDSSH'
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" bash -s <<ENDSSH
           cat > ~/tecnoaging-back/.env <<'ENDENV'
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
