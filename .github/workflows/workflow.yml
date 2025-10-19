@@ -67,20 +67,19 @@ jobs:
         run: |
           set -euo pipefail
     
-          # Criar .env localmente com secrets interpolados
-          cat > /tmp/.env <<'EOF'
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" bash -s <<'ENDSSH'
+          cat > ~/tecnoaging-back/.env <<'ENDENV'
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           NODE_ENV=${{ secrets.NODE_ENV || 'production' }}
           NEST_PORT=3333
           HEALTH_HEAP_LIMIT_MB=200
           HEALTH_RSS_LIMIT_MB=300
-          EOF
-    
-          # Enviar para servidor
-          scp -P "${SSH_PORT:-22}" /tmp/.env "${SSH_USER}@${SSH_HOST}:${APP_DIR}/.env"
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "chmod 600 ${APP_DIR}/.env"
-          rm -f /tmp/.env
+          ENDENV
+          chmod 600 ~/tecnoaging-back/.env
+          ENDSSH
+     
+            
           
       - name: Build e (re)start com PM2 (único processo)
         run: |
