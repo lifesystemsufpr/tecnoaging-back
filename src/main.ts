@@ -18,7 +18,7 @@ async function bootstrap() {
   logger.log('Starting application...');
 
   // Set global prefix
-  app.setGlobalPrefix('backend');
+  //app.setGlobalPrefix('backend');
 
   // Validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

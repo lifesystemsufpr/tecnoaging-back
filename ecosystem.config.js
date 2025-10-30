@@ -1,12 +1,12 @@
 module.exports = {
   apps: [{
-    name: 'tecno-aging-api',
+    name: 'TecnoAging-api',
     script: 'dist/main.js',
-    instances: 'max',
-    exec_mode: 'cluster',
+    instances: 1,
+    exec_mode: 'fork',
     env: {
       NODE_ENV: 'production',
-      PORT: 3000
+      //PORT: 3000
     },
     error_file: './logs/err.log',
     out_file: './logs/out.log',
