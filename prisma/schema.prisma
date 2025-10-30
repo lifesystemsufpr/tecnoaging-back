@@ -173,6 +173,7 @@ enum SocialEconomicLevel {
   B
   C
   D
+  E
 }
 
 enum TypeEvaluation {
