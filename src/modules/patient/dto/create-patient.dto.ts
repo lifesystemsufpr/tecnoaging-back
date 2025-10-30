@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsString,
+  MaxDate,
   ValidateNested,
 } from 'class-validator';
 import { CreateUserDto } from 'src/modules/users/dtos/create-user.dto';
@@ -28,6 +29,9 @@ export class CreatePatientDto {
   @IsNotEmpty()
   @IsDate()
   @Type(() => Date)
+  @MaxDate(new Date(), {
+    message: 'A data de nascimento não pode ser uma data futura.',
+  })
   birthday: Date;
 
   @ApiProperty({

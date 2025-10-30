@@ -201,7 +201,7 @@ export class EvaluationService extends BaseService<
         include: this.defaultInclude as Prisma.EvaluationInclude,
         skip,
         take,
-        orderBy: { date: 'desc' },
+        orderBy: { time_end: 'desc' },
       }),
       this.prisma.evaluation.count({ where }),
     ]);

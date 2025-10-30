@@ -33,6 +33,15 @@ export class CreateSensorDataDto {
   accel_y: number;
 
   @ApiProperty({
+    description: 'Acceleration data on Z axis',
+    example: 0.656,
+    type: Number,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  accel_z: number;
+
+  @ApiProperty({
     description: 'Gyroscope data on X axis',
     example: 1.234,
     type: Number,

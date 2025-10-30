@@ -34,6 +34,8 @@ model Researcher {
   user          User        @relation(fields: [id], references: [id])
   institution   Institution @relation(fields: [institutionId], references: [id])
 
+  @@index([institutionId])
+
   @@map("researcher")
 }
 
@@ -45,6 +47,9 @@ model HealthProfessional {
   speciality String
   evaluation Evaluation[]
   user       User         @relation(fields: [id], references: [id])
+
+  @@index([speciality])
+  @@index([active])
 
   @@map("health_professional")
 }
@@ -83,12 +88,16 @@ model SensorData {
   id           String     @id @default(uuid())
   timestamp    DateTime
   accel_x      Float
-  accel_y      Float
+  accel_y      Float      
+  accel_z      Float      @default(0.0)
   gyro_x       Float
   gyro_y       Float
   gyro_z       Float
   evaluationId String
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+
+  @@index([evaluationId])
+  @@index([timestamp])
 
   @@map("sensor_data")
 }
@@ -107,6 +116,13 @@ model Evaluation {
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
   patient              Patient            @relation(fields: [patientId], references: [id])
   sensorData           SensorData[]
+
+  @@index([patientId])
+  @@index([healthProfessionalId])
+  @@index([healthcareUnitId])
+  @@index([date])
+  @@index([type])
+  // ------------------
 
   @@map("evaluation")
 }
@@ -162,5 +178,4 @@ enum SocialEconomicLevel {
 enum TypeEvaluation {
   FTSTS
   TUG
-  SSTS_30
 }

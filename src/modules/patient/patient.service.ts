@@ -87,12 +87,33 @@ export class PatientService extends BaseService<
     try {
       await this.findOne(id);
       let hasEffectiveChanges = false;
+      const timeZone = 'America/Sao_Paulo';
 
       return await this.prisma.$transaction(async (tx) => {
         const { user: userData, ...patientData } = updatePatientDto;
+        let newPassword: string | undefined = undefined;
+
+        if (patientData && patientData.birthday) {
+          const dateString = new Date(patientData.birthday)
+            .toISOString()
+            .split('T')[0];
+          const correctDate = fromZonedTime(dateString, timeZone);
+          newPassword = formatInTimeZone(correctDate, timeZone, 'ddMMyyyy');
+        }
 
         if (userData && Object.keys(userData).length > 0) {
-          await this.userService.update(id, userData, tx);
+          delete userData.password;
+
+          if (newPassword) {
+            userData.password = newPassword;
+          }
+
+          if (Object.keys(userData).length > 0) {
+            await this.userService.update(id, userData, tx);
+            hasEffectiveChanges = true;
+          }
+        } else if (newPassword) {
+          await this.userService.update(id, { password: newPassword }, tx);
           hasEffectiveChanges = true;
         }
 
@@ -103,15 +124,20 @@ export class PatientService extends BaseService<
           });
           hasEffectiveChanges = true;
         }
+
         if (!hasEffectiveChanges) {
           throw new BadRequestException(
             'Nenhum campo válido para atualização foi fornecido.',
           );
         }
+
         return this.findOne(id, tx);
       });
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
       if (
@@ -128,24 +154,11 @@ export class PatientService extends BaseService<
 
   async remove(id: string) {
     return await this.prisma.$transaction(async (tx) => {
-      const evaluations = await tx.evaluation.findMany({
-        where: { patientId: id },
-        select: { id: true }, // Só precisamos dos IDs
-      });
-      const evaluationIds = evaluations.map((e) => e.id);
-
-      if (evaluationIds.length > 0) {
-        await tx.sensorData.deleteMany({
-          where: { evaluationId: { in: evaluationIds } },
-        });
+      const validPatient = await this.findOne(id, tx);
+      if (!validPatient) {
+        throw new NotFoundException();
       }
-
-      await tx.evaluation.deleteMany({
-        where: { patientId: id },
-      });
-
       const patient = await tx.patient.delete({ where: { id } });
-
       const user = await this.userService.remove(id, tx);
 
       return { ...patient, ...user };
