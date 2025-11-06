@@ -11,6 +11,7 @@ model User {
   id                 String              @id @default(uuid())
   cpf                String              @unique
   fullName           String
+  name_normalized    String              @db.Text
   password           String
   updatedAt          DateTime            @updatedAt
   active             Boolean             @default(true)

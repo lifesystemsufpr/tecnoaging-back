@@ -1,9 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { QueryDto } from '../dto/query.dto';
 
 type PrismaDelegate = {
-  findMany: (args: any) => Promise<any[]>;
-  count: (args: any) => Promise<number>;
+  findMany: (args: any) => Prisma.PrismaPromise<any[]>;
+  count: (args: any) => Prisma.PrismaPromise<number>;
 };
 
 type WhereInput<T extends PrismaDelegate> = Parameters<
@@ -13,6 +13,11 @@ type WhereInput<T extends PrismaDelegate> = Parameters<
 type Include<T extends PrismaDelegate> = Parameters<
   T['findMany']
 >[0]['include'];
+
+function normalizeString(str: string): string {
+  if (!str) return str;
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
 export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
   protected readonly defaultInclude: Include<T>;
@@ -37,21 +42,28 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
     const searchWhere: WhereInput<T> = {};
 
     if (search && this.searchableFields.length > 0) {
+      const normalizedSearch = normalizeString(search);
+
       searchWhere.OR = this.searchableFields.map((field) => {
+        const normalizedField = `${field}_normalized`;
+
         if (field.includes('.')) {
           const [relation, relationField] = field.split('.');
+          const normalizedRelationField = `${relationField}_normalized`;
+
           return {
             [relation]: {
-              [relationField]: {
-                contains: search,
+              [normalizedRelationField]: {
+                contains: normalizedSearch,
                 mode: 'insensitive',
               },
             },
           };
         }
+
         return {
-          [field]: {
-            contains: search,
+          [normalizedField]: {
+            contains: normalizedSearch,
             mode: 'insensitive',
           },
         };
@@ -61,17 +73,16 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
     const where: WhereInput<T> = {
       AND: [searchWhere, additionalWhere],
     };
-    const [data, total] = (await this.prisma.$transaction([
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (this.model as any).findMany({
+
+    const [data, total] = await this.prisma.$transaction([
+      this.model.findMany({
         where,
         skip,
         take,
         include: this.defaultInclude,
       }),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (this.model as any).count({ where }),
-    ])) as [any[], number];
+      this.model.count({ where }),
+    ]);
 
     return {
       data: data.map((item) => this.transform(item)),
