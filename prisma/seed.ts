@@ -10,6 +10,7 @@ import { hashPassword } from '../src/shared/functions/hash-password';
 import { normalizeString } from '../src/shared/functions/normalize-string';
 
 const prisma = new PrismaClient();
+// eslint-disable-next-line sonarjs/no-hardcoded-passwords
 const password = 'senha123';
 
 async function main() {
@@ -34,7 +35,7 @@ async function main() {
   const healthcareUnit = await prisma.healthcareUnit.create({
     data: {
       name: healthcareUnitName,
-      name_normalized: normalizeString(healthcareUnitName),
+      name_normalized: normalizeString(healthcareUnitName) || '',
       zipCode: '80020000',
       street: 'Rua XV de Novembro',
       number: '123',
@@ -48,7 +49,7 @@ async function main() {
   const institution = await prisma.institution.create({
     data: {
       title: institutionTitle,
-      title_normalized: normalizeString(institutionTitle),
+      title_normalized: normalizeString(institutionTitle) || '',
     },
   });
   console.log('✅ Unidades e Instituições criadas.');
@@ -60,7 +61,7 @@ async function main() {
     data: {
       cpf: '00000000000',
       fullName: managerName,
-      fullName_normalized: normalizeString(managerName),
+      fullName_normalized: normalizeString(managerName) || '',
       gender: Gender.OTHER,
       password: await hashPassword(password),
       role: SystemRole.MANAGER,
@@ -73,7 +74,7 @@ async function main() {
     data: {
       cpf: '11111111111',
       fullName: healthProName,
-      fullName_normalized: normalizeString(healthProName),
+      fullName_normalized: normalizeString(healthProName) || '',
       gender: Gender.FEMALE,
       password: await hashPassword(password),
       role: SystemRole.HEALTH_PROFESSIONAL,
@@ -81,7 +82,7 @@ async function main() {
         create: {
           email: 'ana.costa@email.com',
           speciality: healthProSpeciality,
-          speciality_normalized: normalizeString(healthProSpeciality),
+          speciality_normalized: normalizeString(healthProSpeciality) || '',
         },
       },
     },
@@ -92,7 +93,7 @@ async function main() {
     data: {
       cpf: '22222222222',
       fullName: researcherName,
-      fullName_normalized: normalizeString(researcherName),
+      fullName_normalized: normalizeString(researcherName) || '',
       gender: Gender.MALE,
       password: await hashPassword(password),
       role: SystemRole.RESEARCHER,
@@ -111,7 +112,7 @@ async function main() {
     data: {
       cpf: '33333333333',
       fullName: patientName,
-      fullName_normalized: normalizeString(patientName),
+      fullName_normalized: normalizeString(patientName) || '',
       gender: Gender.MALE,
       password: await hashPassword(password),
       role: SystemRole.PATIENT,

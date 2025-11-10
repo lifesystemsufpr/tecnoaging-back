@@ -11,7 +11,7 @@ model User {
   id                     String              @id @default(uuid())
   cpf                    String              @unique
   fullName               String
-  fullName_normalized    String              @db.Text
+  fullName_normalized    String              @db.Text @default("")
   password               String
   updatedAt              DateTime            @updatedAt
   active                 Boolean             @default(true)
@@ -46,7 +46,7 @@ model HealthProfessional {
   updatedAt               DateTime     @updatedAt
   active                  Boolean      @default(true)
   speciality              String
-  speciality_normalized   String       @db.Text
+  speciality_normalized   String       @db.Text @default("")
   evaluation              Evaluation[]
   user                    User         @relation(fields: [id], references: [id])
 
@@ -59,10 +59,12 @@ model HealthProfessional {
 model Institution {
   id                String       @id @default(uuid())
   title             String
-  title_normalized  String       @db.Text
+  title_normalized  String       @db.Text @default("")
+  active            Boolean      @default(true)
   researchers       Researcher[]
 
   @@index([title_normalized])
+  @@index([active])
   @@map("institution")
 }
 
@@ -131,7 +133,7 @@ model Evaluation {
 model HealthcareUnit {
   id                String       @id @default(uuid())
   name              String
-  name_normalized   String       @db.Text
+  name_normalized   String       @db.Text @default("")
   zipCode           String
   street            String
   number            String
@@ -139,9 +141,11 @@ model HealthcareUnit {
   city              String
   state             String
   neighborhood      String
+  active            Boolean      @default(true)
   evaluations       Evaluation[]
 
   @@index([name_normalized])
+  @@index([active])
   @@map("healthcare_unit")
 }
 

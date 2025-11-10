@@ -22,7 +22,7 @@ export class UserService {
     const { password, fullName, ...userData } = request;
 
     const hashedPassword = await hashPassword(password);
-    const normalizedFullName = normalizeString(fullName);
+    const normalizedFullName = normalizeString(fullName) || '';
 
     try {
       const user = await prisma.user.create({

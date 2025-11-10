@@ -15,11 +15,13 @@ import {
   User,
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
+import { QueryDto } from 'src/shared/dto/query.dto';
 
 type ResearcherWithDetails = Researcher & {
   user: User;
   institution: Institution;
 };
+
 export type ResearcherResponse = Omit<Researcher, 'userId' | 'institutionId'> &
   Omit<User, 'password'> &
   Omit<Institution, 'id' | 'title'> & { institutionName: string };
@@ -46,7 +48,7 @@ export class ResearcherService extends BaseService<
 
   protected transform(researcher: ResearcherWithDetails): ResearcherResponse {
     const { password: _password, ...userData } = researcher.user;
-    const { title } = researcher.institution;
+    const { title, title_normalized } = researcher.institution;
     const {
       user: _user,
       institution: _institution,
@@ -55,8 +57,9 @@ export class ResearcherService extends BaseService<
 
     return {
       ...userData,
-      institutionName: title,
       ...researcherData,
+      institutionName: title,
+      title_normalized: title_normalized,
     };
   }
 
@@ -80,11 +83,25 @@ export class ResearcherService extends BaseService<
     });
   }
 
+  async findAll(queryDto: QueryDto) {
+    const customWhere = {
+      active: true,
+      user: {
+        active: true,
+      },
+    };
+    return super.findAll(queryDto, customWhere);
+  }
+
   async findOne(id: string, tx?: Prisma.TransactionClient) {
     const prismaClient = tx || this.prisma;
     const researcherWithDetails =
-      await prismaClient.researcher.findUniqueOrThrow({
-        where: { id },
+      await prismaClient.researcher.findFirstOrThrow({
+        where: {
+          id,
+          active: true,
+          user: { active: true },
+        },
         include: {
           user: true,
           institution: true,
@@ -132,7 +149,7 @@ export class ResearcherService extends BaseService<
         error.code === 'P2025'
       ) {
         throw new NotFoundException(
-          `Paciente com o ID '${id}' não encontrado.`,
+          `Pesquisador com o ID '${id}' não encontrado.`,
         );
       }
       throw error;
@@ -140,14 +157,17 @@ export class ResearcherService extends BaseService<
   }
 
   async remove(id: string) {
+    await this.findOne(id);
+
     return this.prisma.$transaction(async (tx) => {
-      const researcher = await tx.researcher.delete({
+      const researcher = await tx.researcher.update({
         where: { id },
+        data: { active: false },
       });
 
-      const user = await this.userService.remove(id, tx);
+      await this.userService.update(id, { active: false }, tx);
 
-      return { ...researcher, ...user };
+      return researcher;
     });
   }
 }

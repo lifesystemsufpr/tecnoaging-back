@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateHealthUnitDto {
   @ApiProperty({
@@ -64,4 +64,8 @@ export class CreateHealthUnitDto {
   @IsNotEmpty()
   @IsString()
   state: string;
+
+  @IsNotEmpty()
+  @IsBoolean()
+  active: boolean;
 }

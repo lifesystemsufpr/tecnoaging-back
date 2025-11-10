@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { QueryDto } from '../dto/query.dto';
+import { normalizeString } from '../functions/normalize-string';
 
 type PrismaDelegate = {
   findMany: (args: any) => Prisma.PrismaPromise<any[]>;
@@ -13,11 +14,6 @@ type WhereInput<T extends PrismaDelegate> = Parameters<
 type Include<T extends PrismaDelegate> = Parameters<
   T['findMany']
 >[0]['include'];
-
-function normalizeString(str: string): string {
-  if (!str) return str;
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
 
 export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
   protected readonly defaultInclude: Include<T>;
@@ -41,32 +37,44 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
 
     const searchWhere: WhereInput<T> = {};
 
+    const nonNormalizedFields = ['cpf', 'email'];
+
     if (search && this.searchableFields.length > 0) {
-      const normalizedSearch = normalizeString(search);
+      const normalizedSearch = normalizeString(search) || '';
+      const rawSearch = search;
 
       searchWhere.OR = this.searchableFields.map((field) => {
-        const normalizedField = `${field}_normalized`;
+        let isNonNormalized = nonNormalizedFields.includes(field);
+        let relation = '';
+        let fieldName = field;
 
         if (field.includes('.')) {
-          const [relation, relationField] = field.split('.');
-          const normalizedRelationField = `${relationField}_normalized`;
-
-          return {
-            [relation]: {
-              [normalizedRelationField]: {
-                contains: normalizedSearch,
-                mode: 'insensitive',
-              },
-            },
-          };
+          const parts = field.split('.');
+          relation = parts[0];
+          fieldName = parts[1];
+          if (nonNormalizedFields.includes(fieldName)) {
+            isNonNormalized = true;
+          }
         }
 
-        return {
+        if (isNonNormalized) {
+          const whereClause = {
+            [fieldName]: {
+              contains: rawSearch,
+              mode: 'insensitive',
+            },
+          };
+          return relation ? { [relation]: whereClause } : whereClause;
+        }
+
+        const normalizedField = `${fieldName}_normalized`;
+        const whereClause = {
           [normalizedField]: {
             contains: normalizedSearch,
             mode: 'insensitive',
           },
         };
+        return relation ? { [relation]: whereClause } : whereClause;
       }) as Array<Record<string, any>>;
     }
 
