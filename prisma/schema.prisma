@@ -8,19 +8,19 @@ datasource db {
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  cpf                String              @unique
-  fullName           String
-  name_normalized    String              @db.Text
-  password           String
-  updatedAt          DateTime            @updatedAt
-  active             Boolean             @default(true)
-  gender             Gender
-  role               SystemRole
-  phone              String?
-  healthProfessional HealthProfessional?
-  patient            Patient?
-  researcher         Researcher?
+  id                     String              @id @default(uuid())
+  cpf                    String              @unique
+  fullName               String
+  fullName_normalized    String              @db.Text
+  password               String
+  updatedAt              DateTime            @updatedAt
+  active                 Boolean             @default(true)
+  gender                 Gender
+  role                   SystemRole
+  phone                  String?
+  healthProfessional     HealthProfessional?
+  patient                Patient?
+  researcher             Researcher?
 
   @@map("tecnoAging_user")
 }
