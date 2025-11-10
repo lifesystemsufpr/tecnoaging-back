@@ -8,6 +8,7 @@ import { CreateUserDto } from './dtos/create-user.dto';
 import { SystemRole, Prisma, User } from '@prisma/client';
 import { UpdateUserDto } from './dtos/update-user.dto';
 import { hashPassword } from 'src/shared/functions/hash-password';
+import { normalizeString } from 'src/shared/functions/normalize-string';
 
 @Injectable()
 export class UserService {
@@ -18,15 +19,17 @@ export class UserService {
     tx?: Prisma.TransactionClient,
   ): Promise<Omit<User, 'password'>> {
     const prisma = tx || this.prisma;
-    const { password, ...userData } = request;
+    const { password, fullName, ...userData } = request;
 
-    console.log(password);
     const hashedPassword = await hashPassword(password);
+    const normalizedFullName = normalizeString(fullName);
 
     try {
       const user = await prisma.user.create({
         data: {
           ...userData,
+          fullName,
+          fullName_normalized: normalizedFullName,
           active: true,
           password: hashedPassword,
         },
@@ -71,15 +74,22 @@ export class UserService {
     tx?: Prisma.TransactionClient,
   ) {
     const prisma = tx || this.prisma;
+    const dataToUpdate: Prisma.UserUpdateInput = { ...updateUserDto };
 
     if (updateUserDto.password) {
       const hashedPassword = await hashPassword(updateUserDto.password);
-      updateUserDto.password = hashedPassword;
+      dataToUpdate.password = hashedPassword;
+    }
+
+    if (updateUserDto.fullName) {
+      dataToUpdate.fullName_normalized = normalizeString(
+        updateUserDto.fullName,
+      );
     }
 
     return await prisma.user.update({
       where: { id },
-      data: updateUserDto,
+      data: dataToUpdate,
     });
   }
 
