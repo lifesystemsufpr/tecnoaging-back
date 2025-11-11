@@ -72,6 +72,8 @@ jobs:
           {
           echo "DATABASE_URL=${DB_URL}"
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
+          echo "JWT_EXPIRES_IN=900"
+          echo "JWT_REFRESH_EXPIRES_IN=604800"
           echo "NODE_ENV=${{ secrets.NODE_ENV || 'production' }}"
           echo "NEST_PORT=3333"
           echo "HEALTH_HEAP_LIMIT_MB=200"
