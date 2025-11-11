@@ -10,6 +10,7 @@ import { UserService } from '../users/user.service';
 import { Patient, Prisma, SystemRole, User } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BaseService } from 'src/shared/services/base.service';
+import { QueryDto } from 'src/shared/dto/query.dto';
 
 type PatientWithUser = Patient & { user: User };
 export type PatientResponse = Omit<PatientWithUser, 'user'> &
@@ -70,13 +71,27 @@ export class PatientService extends BaseService<
     });
   }
 
+  async findAll(queryDto: QueryDto) {
+    const customWhere = {
+      active: true,
+      user: {
+        active: true,
+      },
+    };
+    return super.findAll(queryDto, customWhere);
+  }
+
   async findOne(
     id: string,
     tx?: Prisma.TransactionClient,
   ): Promise<PatientResponse> {
     const prismaClient = tx || this.prisma;
-    const patientWithUser = await prismaClient.patient.findUniqueOrThrow({
-      where: { id },
+    const patientWithUser = await prismaClient.patient.findFirstOrThrow({
+      where: {
+        id,
+        active: true,
+        user: { active: true },
+      },
       include: { user: true },
     });
 
@@ -153,15 +168,17 @@ export class PatientService extends BaseService<
   }
 
   async remove(id: string) {
-    return await this.prisma.$transaction(async (tx) => {
-      const validPatient = await this.findOne(id, tx);
-      if (!validPatient) {
-        throw new NotFoundException();
-      }
-      const patient = await tx.patient.delete({ where: { id } });
-      const user = await this.userService.remove(id, tx);
+    await this.findOne(id);
 
-      return { ...patient, ...user };
+    return this.prisma.$transaction(async (tx) => {
+      const patient = await tx.patient.update({
+        where: { id },
+        data: { active: false },
+      });
+
+      await this.userService.update(id, { active: false }, tx);
+
+      return patient;
     });
   }
 }

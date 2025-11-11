@@ -10,6 +10,7 @@ import { UserService } from '../users/user.service';
 import { HealthProfessional, Prisma, SystemRole, User } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
 import { QueryDto } from 'src/shared/dto/query.dto';
+import { normalizeString } from 'src/shared/functions/normalize-string';
 
 type HealthProfessionalWithUser = HealthProfessional & { user: User };
 export type HealthProfessionalResponse = Omit<
@@ -50,8 +51,11 @@ export class HealthProfessionalService extends BaseService<
 
   async create(createHealthProfessionalDto: CreateHealthProfessionalDto) {
     return await this.prisma.$transaction(async (tx) => {
-      const { user: createUser, ...createHealthProfessional } =
-        createHealthProfessionalDto;
+      const {
+        user: createUser,
+        speciality,
+        ...createHealthProfessional
+      } = createHealthProfessionalDto;
 
       const user = await this.userService.createUser(
         {
@@ -61,9 +65,13 @@ export class HealthProfessionalService extends BaseService<
         tx,
       );
 
+      const normalizedSpeciality = normalizeString(speciality) || '';
+
       const healthProfessional = await tx.healthProfessional.create({
         data: {
           ...createHealthProfessional,
+          speciality,
+          speciality_normalized: normalizedSpeciality,
           id: user.id,
         },
       });
@@ -89,7 +97,7 @@ export class HealthProfessionalService extends BaseService<
     const prismaClient = tx || this.prisma;
     const healthProfessionalWithUser =
       await prismaClient.healthProfessional.findUniqueOrThrow({
-        where: { id },
+        where: { id, active: true },
         include: { user: true },
       });
     return this.transform(healthProfessionalWithUser);
@@ -105,7 +113,9 @@ export class HealthProfessionalService extends BaseService<
       return await this.prisma.$transaction(async (tx) => {
         const { user: userData, ...healthProfessionalData } =
           updateHealthProfessionalDto;
+
         if (userData && Object.keys(userData).length > 0) {
+          // O UserService.update já lida com a normalização do nome
           await this.userService.update(id, userData, tx);
           hasEffectiveChanges = true;
         }
@@ -113,9 +123,18 @@ export class HealthProfessionalService extends BaseService<
           healthProfessionalData &&
           Object.keys(healthProfessionalData).length > 0
         ) {
+          const dataToUpdate: Prisma.HealthProfessionalUpdateInput = {
+            ...healthProfessionalData,
+          };
+
+          if (healthProfessionalData.speciality) {
+            dataToUpdate.speciality_normalized =
+              normalizeString(healthProfessionalData.speciality) || '';
+          }
+
           await tx.healthProfessional.update({
             where: { id },
-            data: healthProfessionalData,
+            data: dataToUpdate,
           });
           hasEffectiveChanges = true;
         }

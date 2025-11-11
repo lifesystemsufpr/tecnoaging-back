@@ -15,8 +15,8 @@ export interface NestConfig {
 
 export interface SecurityConfig {
   jwtSecret: string;
-  jwtExpirationTime: string;
-  jwtRefreshExpirationTime: string;
+  jwtExpirationTime: number;
+  jwtRefreshExpirationTime: number;
 }
 
 export interface CorsConfig {

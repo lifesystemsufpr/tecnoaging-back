@@ -7,14 +7,15 @@ import {
   TypeEvaluation,
 } from '@prisma/client';
 import { hashPassword } from '../src/shared/functions/hash-password';
+import { normalizeString } from '../src/shared/functions/normalize-string';
 
 const prisma = new PrismaClient();
+// eslint-disable-next-line sonarjs/no-hardcoded-passwords
 const password = 'senha123';
 
 async function main() {
   console.log('🌱 Iniciando o processo de seed...');
 
-  // Limpa o banco de dados na ordem correta para evitar erros de constraint
   console.log('🗑️ Limpando dados existentes...');
   await prisma.sensorData.deleteMany({});
   await prisma.evaluation.deleteMany({});
@@ -26,11 +27,15 @@ async function main() {
   await prisma.healthcareUnit.deleteMany({});
   console.log('✅ Dados limpos.');
 
-  // --- CRIAÇÃO DE DADOS BASE ---
   console.log('🏥 Criando Unidades de Saúde e Instituições...');
+
+  const healthcareUnitName = 'UBS Centro de Saúde';
+  const institutionTitle = 'Universidade Federal do Paraná (UFPR)';
+
   const healthcareUnit = await prisma.healthcareUnit.create({
     data: {
-      name: 'UBS Centro de Saúde',
+      name: healthcareUnitName,
+      name_normalized: normalizeString(healthcareUnitName) || '',
       zipCode: '80020000',
       street: 'Rua XV de Novembro',
       number: '123',
@@ -42,46 +47,53 @@ async function main() {
   });
 
   const institution = await prisma.institution.create({
-    data: { title: 'Universidade Federal do Paraná (UFPR)' },
+    data: {
+      title: institutionTitle,
+      title_normalized: normalizeString(institutionTitle) || '',
+    },
   });
   console.log('✅ Unidades e Instituições criadas.');
 
-  // --- CRIAÇÃO DE USUÁRIOS E PERFIS ---
   console.log('👤 Criando usuários e perfis...');
 
-  // 1. Gerente do Sistema
+  const managerName = 'GERENTE DO SISTEMA';
   await prisma.user.create({
     data: {
       cpf: '00000000000',
-      fullName: 'GERENTE DO SISTEMA',
+      fullName: managerName,
+      fullName_normalized: normalizeString(managerName) || '',
       gender: Gender.OTHER,
       password: await hashPassword(password),
       role: SystemRole.MANAGER,
     },
   });
 
-  // 2. Profissional de Saúde
+  const healthProName = 'Dra. Ana Costa';
+  const healthProSpeciality = 'Fisioterapia';
   const healthProfessional = await prisma.user.create({
     data: {
       cpf: '11111111111',
-      fullName: 'Dra. Ana Costa',
+      fullName: healthProName,
+      fullName_normalized: normalizeString(healthProName) || '',
       gender: Gender.FEMALE,
       password: await hashPassword(password),
       role: SystemRole.HEALTH_PROFESSIONAL,
       healthProfessional: {
         create: {
           email: 'ana.costa@email.com',
-          speciality: 'Fisioterapia', // Agora é um campo de texto
+          speciality: healthProSpeciality,
+          speciality_normalized: normalizeString(healthProSpeciality) || '',
         },
       },
     },
   });
 
-  // 3. Pesquisador
+  const researcherName = 'Dr. Bruno Lima';
   await prisma.user.create({
     data: {
       cpf: '22222222222',
-      fullName: 'Dr. Bruno Lima',
+      fullName: researcherName,
+      fullName_normalized: normalizeString(researcherName) || '',
       gender: Gender.MALE,
       password: await hashPassword(password),
       role: SystemRole.RESEARCHER,
@@ -95,11 +107,12 @@ async function main() {
     },
   });
 
-  // 4. Paciente
+  const patientName = 'Carlos Andrade';
   const patient = await prisma.user.create({
     data: {
       cpf: '33333333333',
-      fullName: 'Carlos Andrade',
+      fullName: patientName,
+      fullName_normalized: normalizeString(patientName) || '',
       gender: Gender.MALE,
       password: await hashPassword(password),
       role: SystemRole.PATIENT,
@@ -122,7 +135,6 @@ async function main() {
   });
   console.log('✅ Usuários e perfis criados.');
 
-  // --- CRIAÇÃO DE AVALIAÇÃO COM DADOS DE SENSOR ---
   console.log('📊 Criando avaliação com dados de sensor...');
   await prisma.evaluation.create({
     data: {
@@ -132,7 +144,7 @@ async function main() {
       healthcareUnitId: healthcareUnit.id,
       date: new Date(),
       time_init: new Date(),
-      time_end: new Date(new Date().getTime() + 15000), // 15 segundos depois
+      time_end: new Date(new Date().getTime() + 15000),
       sensorData: {
         createMany: {
           data: [
@@ -145,7 +157,7 @@ async function main() {
               gyro_z: 0.5,
             },
             {
-              timestamp: new Date(new Date().getTime() + 100), // 100ms depois
+              timestamp: new Date(new Date().getTime() + 100),
               accel_x: 0.12,
               accel_y: 0.23,
               gyro_x: 0.34,

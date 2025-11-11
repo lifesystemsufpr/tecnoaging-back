@@ -1,9 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { QueryDto } from '../dto/query.dto';
+import { normalizeString } from '../functions/normalize-string';
 
 type PrismaDelegate = {
-  findMany: (args: any) => Promise<any[]>;
-  count: (args: any) => Promise<number>;
+  findMany: (args: any) => Prisma.PrismaPromise<any[]>;
+  count: (args: any) => Prisma.PrismaPromise<number>;
 };
 
 type WhereInput<T extends PrismaDelegate> = Parameters<
@@ -36,42 +37,60 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
 
     const searchWhere: WhereInput<T> = {};
 
+    const nonNormalizedFields = ['cpf', 'email'];
+
     if (search && this.searchableFields.length > 0) {
+      const normalizedSearch = normalizeString(search) || '';
+      const rawSearch = search;
+
       searchWhere.OR = this.searchableFields.map((field) => {
+        let isNonNormalized = nonNormalizedFields.includes(field);
+        let relation = '';
+        let fieldName = field;
+
         if (field.includes('.')) {
-          const [relation, relationField] = field.split('.');
-          return {
-            [relation]: {
-              [relationField]: {
-                contains: search,
-                mode: 'insensitive',
-              },
+          const parts = field.split('.');
+          relation = parts[0];
+          fieldName = parts[1];
+          if (nonNormalizedFields.includes(fieldName)) {
+            isNonNormalized = true;
+          }
+        }
+
+        if (isNonNormalized) {
+          const whereClause = {
+            [fieldName]: {
+              contains: rawSearch,
+              mode: 'insensitive',
             },
           };
+          return relation ? { [relation]: whereClause } : whereClause;
         }
-        return {
-          [field]: {
-            contains: search,
+
+        const normalizedField = `${fieldName}_normalized`;
+        const whereClause = {
+          [normalizedField]: {
+            contains: normalizedSearch,
             mode: 'insensitive',
           },
         };
+        return relation ? { [relation]: whereClause } : whereClause;
       }) as Array<Record<string, any>>;
     }
 
     const where: WhereInput<T> = {
       AND: [searchWhere, additionalWhere],
     };
-    const [data, total] = (await this.prisma.$transaction([
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (this.model as any).findMany({
+
+    const [data, total] = await this.prisma.$transaction([
+      this.model.findMany({
         where,
         skip,
         take,
         include: this.defaultInclude,
       }),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (this.model as any).count({ where }),
-    ])) as [any[], number];
+      this.model.count({ where }),
+    ]);
 
     return {
       data: data.map((item) => this.transform(item)),

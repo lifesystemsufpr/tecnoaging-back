@@ -1,10 +1,20 @@
 import { Logger } from '@nestjs/common';
 import { AppConfig, SecurityConfig } from './config.interface';
 
+// A biblioteca JWT espera o tempo de expiração em segundos quando é um número.
+const FIFTEEN_MINUTES_IN_SECONDS = 15 * 60; // 900
+const SEVEN_DAYS_IN_SECONDS = 7 * 24 * 60 * 60; // 604800
+
 const securityConfig: SecurityConfig = {
   jwtSecret: process.env.JWT_SECRET || 'defaultSecret',
-  jwtExpirationTime: process.env.JWT_EXPIRES_IN || '15h',
-  jwtRefreshExpirationTime: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+
+  jwtExpirationTime: process.env.JWT_EXPIRES_IN
+    ? +process.env.JWT_EXPIRES_IN
+    : FIFTEEN_MINUTES_IN_SECONDS,
+
+  jwtRefreshExpirationTime: process.env.JWT_REFRESH_EXPIRES_IN
+    ? +process.env.JWT_REFRESH_EXPIRES_IN
+    : SEVEN_DAYS_IN_SECONDS,
 };
 
 const appConfig: AppConfig = {
@@ -39,7 +49,9 @@ export default () => {
   return appConfig;
 };
 
-function getCorsOrigins(corsOrigins: string | undefined) {
+function getCorsOrigins(
+  corsOrigins: string | undefined,
+): boolean | string | string[] {
   if (!corsOrigins || corsOrigins === 'false') {
     return false;
   }

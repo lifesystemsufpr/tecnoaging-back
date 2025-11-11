@@ -1,4 +1,3 @@
-import { ApiProperty } from '@nestjs/swagger';
 import { SystemRole } from '@prisma/client';
 
 export interface AccessToken {
@@ -18,12 +17,4 @@ export interface Payload {
   cpf: string;
   fullName: string;
   role: SystemRole;
-}
-
-export class LoginRequest {
-  @ApiProperty()
-  username: string;
-
-  @ApiProperty()
-  password: string;
 }
