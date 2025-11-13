@@ -67,5 +67,5 @@ export class CreateHealthUnitDto {
 
   @IsNotEmpty()
   @IsBoolean()
-  active: boolean;
+  active?: boolean;
 }
