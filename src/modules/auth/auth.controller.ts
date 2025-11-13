@@ -33,7 +33,6 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    console.log('Usuário validado e anexado ao request:', user);
     try {
       const tokens = await this.authService.signIn(
         user,
