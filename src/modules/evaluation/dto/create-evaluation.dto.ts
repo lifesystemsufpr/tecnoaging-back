@@ -10,11 +10,19 @@ import {
 } from 'class-validator';
 import { CreateSensorDataDto } from './create-sensor-data.dto';
 import { TypeEvaluation } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+const transformEvaluationType = ({ value }: { value: string }) => {
+  if (value === '5TSTS') {
+    return 'FTSTS';
+  }
+  return value;
+};
 
 export class CreateEvaluationDto {
   @ApiProperty({ example: 'FTSTS' })
   @IsEnum(TypeEvaluation)
+  @Transform(transformEvaluationType)
   @IsNotEmpty()
   type: TypeEvaluation;
 

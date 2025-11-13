@@ -10,7 +10,6 @@ export class LocalAuthGuard extends AuthGuard('local') {
       this.logger.error('Authentication failed:', err || info);
       throw err || new Error('Authentication failed');
     }
-    console.log('Usuário validado e anexado ao request:', user);
     return user;
   }
 }
