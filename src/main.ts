@@ -1,4 +1,5 @@
 import { AppModule } from './app.module';
+import { json, urlencoded } from 'express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { setupSwagger } from './shared/config/swagger.config';
@@ -9,12 +10,15 @@ import {
   SwaggerConfig,
 } from './shared/config/config.interface';
 import { PrismaClientExceptionFilter } from './shared/filters/prisma-client-exception.filter';
- 
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = new Logger('AppInitializer');
 
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
+  app.use(cookieParser());
   logger.log('Starting application...');
 
   // Set global prefix
