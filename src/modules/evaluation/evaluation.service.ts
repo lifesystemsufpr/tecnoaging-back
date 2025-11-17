@@ -96,7 +96,6 @@ export class EvaluationService extends BaseService<
     return this.transform(evaluation as unknown as EvaluationWithDetails);
   }
 
-  // Erro 2 CORRIGIDO: Renomeado de 'findAll' para 'filter'
   async filter(filters: FilterEvaluationDto) {
     const {
       page = 1,
