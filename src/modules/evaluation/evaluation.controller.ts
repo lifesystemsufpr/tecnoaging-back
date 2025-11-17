@@ -32,7 +32,7 @@ export class EvaluationController {
 
   @Get()
   findAll(@Query() filters: FilterEvaluationDto) {
-    return this.evaluationService.findAll(filters);
+    return this.evaluationService.filter(filters);
   }
 
   @Get(':id')

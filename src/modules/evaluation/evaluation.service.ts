@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
+import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
 
 type EvaluationWithDetails = Evaluation & {
   patient: Patient & { user: User };
@@ -39,9 +40,9 @@ export class EvaluationService extends BaseService<
       prisma,
       prisma.evaluation,
       [
-        'patient.user.fullName',
+        'patient.user.fullName_normalized',
         'patient.user.cpf',
-        'healthProfessional.user.fullName',
+        'healthProfessional.user.fullName_normalized',
       ],
       {
         patient: { include: { user: true } },
@@ -95,7 +96,8 @@ export class EvaluationService extends BaseService<
     return this.transform(evaluation as unknown as EvaluationWithDetails);
   }
 
-  async findAll(filters: FilterEvaluationDto) {
+  // Erro 2 CORRIGIDO: Renomeado de 'findAll' para 'filter'
+  async filter(filters: FilterEvaluationDto) {
     const {
       page = 1,
       pageSize = 10,
@@ -130,9 +132,8 @@ export class EvaluationService extends BaseService<
       conditions.push({
         patient: {
           user: {
-            fullName: {
-              contains: patientName,
-              mode: 'insensitive',
+            fullName_normalized: {
+              contains: normalize(patientName),
             },
           },
         },
@@ -142,9 +143,8 @@ export class EvaluationService extends BaseService<
       conditions.push({
         healthProfessional: {
           user: {
-            fullName: {
-              contains: healthProfessionalName,
-              mode: 'insensitive',
+            fullName_normalized: {
+              contains: normalize(healthProfessionalName),
             },
           },
         },
@@ -178,6 +178,10 @@ export class EvaluationService extends BaseService<
       conditions.push({
         OR: this.searchableFields.map((field) => {
           const parts = field.split('.');
+          const normalizedSearch =
+            field.endsWith('_normalized') && search
+              ? normalize(search)
+              : search;
 
           return parts
             .slice()
@@ -185,8 +189,10 @@ export class EvaluationService extends BaseService<
             .reduce(
               (obj: Record<string, any>, part: string) => ({ [part]: obj }),
               {
-                contains: search,
-                mode: 'insensitive',
+                contains: normalizedSearch,
+                ...(field.endsWith('_normalized')
+                  ? {}
+                  : { mode: 'insensitive' }),
               },
             ) as Prisma.EvaluationWhereInput;
         }),
@@ -198,7 +204,31 @@ export class EvaluationService extends BaseService<
     const [evaluations, total] = await this.prisma.$transaction([
       this.prisma.evaluation.findMany({
         where,
-        include: this.defaultInclude as Prisma.EvaluationInclude,
+        select: {
+          id: true,
+          date: true,
+          type: true,
+          time_init: true,
+          time_end: true,
+          patient: {
+            select: {
+              id: true,
+              user: { select: { id: true, fullName: true, cpf: true } },
+            },
+          },
+          healthProfessional: {
+            select: {
+              id: true,
+              user: { select: { id: true, fullName: true } },
+            },
+          },
+          healthcareUnit: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
         skip,
         take,
         orderBy: { time_end: 'desc' },
@@ -207,9 +237,7 @@ export class EvaluationService extends BaseService<
     ]);
 
     return {
-      data: evaluations.map((e) =>
-        this.transform(e as unknown as EvaluationWithDetails),
-      ),
+      data: evaluations,
       meta: { total, page, pageSize, lastPage: Math.ceil(total / pageSize) },
     };
   }
