@@ -117,11 +117,6 @@ model Evaluation {
   type                 TypeEvaluation
   time_end             DateTime           @db.Timestamp(6)
   time_init            DateTime           @db.Timestamp(6)
-  timeToSit            DateTime           @db.Timestamp(6)  @map("time_to_sit")  
-  timeToStand          DateTime           @db.Timestamp(6)  @map("time_to_stand")
-  totalEvaluationTime  Float 
-  totalCycleTime       Float 
-  avgCycleTime         Float
   healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
   patient              Patient            @relation(fields: [patientId], references: [id])

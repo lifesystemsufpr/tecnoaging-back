@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateEvaluationDto } from '../dto/create-evaluation.dto';
 import { PrismaService } from 'nestjs-prisma';
 import {
@@ -12,6 +12,8 @@ import {
 import { BaseService } from 'src/shared/services/base.service';
 import { FilterEvaluationDto } from '../dto/filter-evaluation.dto';
 import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
+import { EvaluationDetailResponseDto } from '../dto/evaluation-detail-response.dto';
+import { SensorDataProcessorService } from './sensor-data-processor.service';
 
 type EvaluationWithDetails = Evaluation & {
   patient: Patient & { user: User };
@@ -35,7 +37,10 @@ export class EvaluationService extends BaseService<
   Prisma.EvaluationDelegate,
   EvaluationResponse
 > {
-  constructor(protected readonly prisma: PrismaService) {
+  constructor(
+    protected readonly prisma: PrismaService,
+    private readonly sensorProcessor: SensorDataProcessorService,
+  ) {
     super(
       prisma,
       prisma.evaluation,
@@ -94,6 +99,35 @@ export class EvaluationService extends BaseService<
     });
 
     return this.transform(evaluation as unknown as EvaluationWithDetails);
+  }
+
+  async findOneDetailed(id: string): Promise<EvaluationDetailResponseDto> {
+    const evaluation = await this.prisma.evaluation.findUnique({
+      where: { id },
+      include: {
+        sensorData: true,
+      },
+    });
+
+    if (!evaluation) throw new NotFoundException('Avaliação não encontrada');
+
+    const sensorBlock = this.sensorProcessor.processSensorData(
+      evaluation.sensorData,
+    );
+    const cycleBlock = this.sensorProcessor.detectCycles(evaluation.sensorData);
+
+    const derivedBlock = this.sensorProcessor.calculateDerivedIndicators(
+      cycleBlock,
+      evaluation.time_init,
+      evaluation.time_end,
+    );
+
+    return {
+      id: evaluation.id,
+      SENSOR: sensorBlock,
+      CYCLE: cycleBlock,
+      DERIVED: derivedBlock,
+    };
   }
 
   async filter(filters: FilterEvaluationDto) {
