@@ -7,7 +7,7 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { EvaluationService } from './evaluation.service';
+import { EvaluationService } from './services/evaluation.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   ApiBearerAuth,

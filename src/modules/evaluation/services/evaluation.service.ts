@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CreateEvaluationDto } from './dto/create-evaluation.dto';
+import { CreateEvaluationDto } from '../dto/create-evaluation.dto';
 import { PrismaService } from 'nestjs-prisma';
 import {
   Evaluation,
@@ -10,7 +10,7 @@ import {
   User,
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
-import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
+import { FilterEvaluationDto } from '../dto/filter-evaluation.dto';
 import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
 
 type EvaluationWithDetails = Evaluation & {
