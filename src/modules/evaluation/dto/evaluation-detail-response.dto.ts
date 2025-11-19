@@ -13,6 +13,7 @@ export class SensorBlock {
   downsampled: boolean;
   method: string;
   originalSampleCount: number;
+  data: number[][];
   stats: Record<string, SensorAxisStats>;
 }
 

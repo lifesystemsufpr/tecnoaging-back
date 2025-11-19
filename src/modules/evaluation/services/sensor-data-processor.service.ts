@@ -105,6 +105,17 @@ export class SensorDataProcessorService {
     );
 
     const columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz'];
+
+    const data = sortedData.map((sensor) => [
+      sensor.timestamp.getTime(),
+      Number(sensor.accel_x),
+      Number(sensor.accel_y),
+      Number(sensor.accel_z),
+      Number(sensor.gyro_x),
+      Number(sensor.gyro_y),
+      Number(sensor.gyro_z),
+    ]);
+
     const stats = this.calculateSensorStats(sortedData);
 
     return {
@@ -124,6 +135,7 @@ export class SensorDataProcessorService {
       downsampled: true,
       method: 'LTTB',
       originalSampleCount: sortedData.length,
+      data: data,
       stats: stats,
     };
   }
