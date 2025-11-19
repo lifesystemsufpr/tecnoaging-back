@@ -1,12 +1,10 @@
-// src/modules/evaluation/services/sensor-data-processor.service.ts
-
 import { Injectable } from '@nestjs/common';
 import { SensorData } from '@prisma/client';
 import {
   CycleBlock,
   CycleData,
   DerivedBlock,
-  DerivedIndicator,
+  EvaluationResponse,
   SensorAxisStats,
   SensorBlock,
 } from '../dto/evaluation-detail-response.dto';
@@ -20,16 +18,38 @@ interface IThresholds {
 }
 
 interface IDetectionState {
-  cycles: CycleData[];
+  cycles: { tot: number; stand: number; sit: number }[];
   currentState: MovementState;
   currentCycle: number;
   cycleStartTime: number | null;
-  subirStartTime: number | null;
-  descerStartTime: number | null;
+  standStartTime: number | null;
+  sitStartTime: number | null;
 }
 
 @Injectable()
 export class SensorDataProcessorService {
+  processFullEvaluation(
+    sensorData: SensorData[],
+    timeInit: Date,
+    timeEnd: Date,
+    patientAge: number,
+  ): EvaluationResponse {
+    const sensorBlock = this.processSensorData(sensorData);
+    const cycleBlock = this.detectCycles(sensorData);
+    const derivedBlock = this.calculateDerivedIndicators(
+      cycleBlock,
+      timeInit,
+      timeEnd,
+      patientAge,
+    );
+
+    return {
+      sensor: sensorBlock,
+      derived: derivedBlock,
+      cycle: cycleBlock,
+    };
+  }
+
   detectCycles(sensorData: SensorData[]): CycleBlock {
     const sortedData = [...sensorData].sort(
       (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
@@ -46,31 +66,178 @@ export class SensorDataProcessorService {
       currentState: 'SITTING',
       currentCycle: 0,
       cycleStartTime: null,
-      subirStartTime: null,
-      descerStartTime: null,
+      standStartTime: null,
+      sitStartTime: null,
     };
 
     for (const dataPoint of sortedData) {
-      if (state.currentCycle >= 5) break;
       this.processDataPoint(dataPoint, state, thresholds);
     }
 
     while (state.cycles.length < 5) {
-      state.cycles.push({ TOT: 0, SUBIR: 0, DESCER: 0 });
+      state.cycles.push({ tot: 0, stand: 0, sit: 0 });
     }
 
     const minCycle = this.calculateMinCycle(state.cycles);
     const maxCycle = this.calculateMaxCycle(state.cycles);
+    const avgCycle = this.calculateAvgCycle(state.cycles);
+
+    const response: CycleBlock = {
+      min: { total: minCycle.tot, stand: minCycle.stand, sit: minCycle.sit },
+      max: { total: maxCycle.tot, stand: maxCycle.stand, sit: maxCycle.sit },
+      avg: { total: avgCycle.tot, stand: avgCycle.stand, sit: avgCycle.sit },
+    };
+
+    state.cycles.forEach((cycle, index) => {
+      response[`C${index + 1}`] = {
+        total: cycle.tot,
+        stand: cycle.stand,
+        sit: cycle.sit,
+      };
+    });
+
+    return response;
+  }
+
+  processSensorData(sensorData: SensorData[]): SensorBlock {
+    const sortedData = [...sensorData].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+    );
+
+    const columns = ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz'];
+    const stats = this.calculateSensorStats(sortedData);
 
     return {
-      C1: state.cycles[0],
-      C2: state.cycles[1],
-      C3: state.cycles[2],
-      C4: state.cycles[3],
-      C5: state.cycles[4],
-      MIN: minCycle,
-      MAX: maxCycle,
+      format: 'col',
+      columns: columns,
+      units: {
+        t: 'ms',
+        ax: 'g',
+        ay: 'g',
+        az: 'g',
+        gx: 'rad/s',
+        gy: 'rad/s',
+        gz: 'rad/s',
+      },
+      samplingHz: 100,
+      resolution: 1000,
+      downsampled: true,
+      method: 'LTTB',
+      originalSampleCount: sortedData.length,
+      stats: stats,
     };
+  }
+
+  calculateDerivedIndicators(
+    cycleBlock: CycleBlock,
+    timeInit: Date,
+    timeEnd: Date,
+    patientAge: number,
+  ): DerivedBlock {
+    const tempoTotalTeste = (timeEnd.getTime() - timeInit.getTime()) / 1000;
+
+    const validCycles: CycleData[] = Object.keys(cycleBlock)
+      .filter((key) => key.startsWith('C'))
+      .map((key) => cycleBlock[key])
+      .filter((c) => c.total > 0);
+
+    const avgStandTime =
+      validCycles.reduce((sum, c) => sum + c.stand, 0) /
+        (validCycles.length || 1) || 1;
+    const powerIndex = parseFloat((1 / avgStandTime).toFixed(2));
+
+    let fatigueIndex = 0;
+    if (validCycles.length >= 2) {
+      const firstHalf = validCycles.slice(
+        0,
+        Math.floor(validCycles.length / 2),
+      );
+      const secondHalf = validCycles.slice(Math.floor(validCycles.length / 2));
+
+      const avgTimeFirst =
+        firstHalf.reduce((a, b) => a + b.total, 0) / firstHalf.length;
+      const avgTimeSecond =
+        secondHalf.reduce((a, b) => a + b.total, 0) / secondHalf.length;
+
+      fatigueIndex = parseFloat(
+        (((avgTimeSecond - avgTimeFirst) / avgTimeFirst) * 10).toFixed(2),
+      );
+    }
+
+    const meanTotalTime =
+      validCycles.reduce((sum, c) => sum + c.total, 0) /
+      (validCycles.length || 1);
+    const variance =
+      validCycles.reduce(
+        (sum, c) => sum + Math.pow(c.total - meanTotalTime, 2),
+        0,
+      ) / (validCycles.length || 1);
+    const symmetryIndex = parseFloat(Math.sqrt(variance).toFixed(2));
+
+    return {
+      patientAgeOnEvaluation: patientAge,
+      overallClassification: this.getOverallClassification(
+        validCycles.length,
+        patientAge,
+      ),
+      indicators: [
+        {
+          name: 'Tempo Total',
+          value: parseFloat(tempoTotalTeste.toFixed(2)),
+          maxValue: 60,
+          classification: tempoTotalTeste <= 30 ? 'Normal' : 'Lento',
+        },
+        {
+          name: 'Potência (Vel. Levante)',
+          value: powerIndex,
+          maxValue: 5.0,
+          classification: this.classifyPower(powerIndex),
+        },
+        {
+          name: 'Fadiga (Variação Temporal)',
+          value: fatigueIndex,
+          maxValue: 10,
+          classification: this.classifyFatigue(fatigueIndex),
+        },
+        {
+          name: 'Regularidade (Simetria)',
+          value: symmetryIndex,
+          maxValue: 5,
+          classification: this.classifySymmetry(symmetryIndex),
+        },
+      ],
+    };
+  }
+
+  private classifyPower(val: number): string {
+    if (val > 1.5) return 'Excelente';
+    if (val > 1.0) return 'Bom';
+    if (val > 0.5) return 'Regular';
+    return 'Baixo';
+  }
+
+  private classifyFatigue(val: number): string {
+    if (val <= 0) return 'Ausente';
+    if (val < 1.0) return 'Baixa';
+    if (val < 2.0) return 'Média';
+    return 'Alta';
+  }
+
+  private classifySymmetry(stdDev: number): string {
+    if (stdDev < 0.5) return 'Excelente';
+    if (stdDev < 1.0) return 'Bom';
+    if (stdDev < 2.0) return 'Regular';
+    return 'Irregular';
+  }
+
+  private getOverallClassification(cyclesCount: number, age: number): string {
+    let target = 14;
+    if (age > 70) target = 12;
+    if (age > 80) target = 10;
+
+    if (cyclesCount >= target) return 'Acima da Média';
+    if (cyclesCount >= target - 3) return 'Na Média';
+    return 'Abaixo da Média';
   }
 
   private processDataPoint(
@@ -78,7 +245,7 @@ export class SensorDataProcessorService {
     state: IDetectionState,
     thresholds: IThresholds,
   ) {
-    const accelY = dataPoint.accel_y;
+    const accelY = Number(dataPoint.accel_y);
     const timestamp = dataPoint.timestamp.getTime();
 
     switch (state.currentState) {
@@ -91,32 +258,29 @@ export class SensorDataProcessorService {
         );
         if (sitResult) {
           state.currentState = 'STANDING_UP';
-          state.subirStartTime = sitResult.subirStartTime;
+          state.standStartTime = sitResult.standStartTime;
           state.cycleStartTime = sitResult.cycleStartTime;
         }
         break;
       }
-
       case 'STANDING_UP':
         if (this.handleStandingUpState(accelY, thresholds)) {
           state.currentState = 'STANDING';
         }
         break;
-
       case 'STANDING':
         if (this.handleStandingState(accelY, timestamp, thresholds)) {
           state.currentState = 'SITTING_DOWN';
-          state.descerStartTime = timestamp;
+          state.sitStartTime = timestamp;
         }
         break;
-
       case 'SITTING_DOWN': {
         const sitDownResult = this.handleSittingDownState(
           accelY,
           timestamp,
           state.cycleStartTime,
-          state.subirStartTime,
-          state.descerStartTime,
+          state.standStartTime,
+          state.sitStartTime,
           thresholds,
         );
         if (sitDownResult) {
@@ -125,8 +289,8 @@ export class SensorDataProcessorService {
           state.cycles.push(sitDownResult.cycle);
 
           state.cycleStartTime = timestamp;
-          state.subirStartTime = null;
-          state.descerStartTime = null;
+          state.standStartTime = null;
+          state.sitStartTime = null;
         }
         break;
       }
@@ -141,7 +305,7 @@ export class SensorDataProcessorService {
   ) {
     if (accelY > thresholds.UP) {
       return {
-        subirStartTime: timestamp,
+        standStartTime: timestamp,
         cycleStartTime: cycleStartTime === null ? timestamp : cycleStartTime,
       };
     }
@@ -164,102 +328,34 @@ export class SensorDataProcessorService {
     accelY: number,
     timestamp: number,
     cycleStartTime: number | null,
-    subirStartTime: number | null,
-    descerStartTime: number | null,
+    standStartTime: number | null,
+    sitStartTime: number | null,
     thresholds: IThresholds,
   ) {
     if (Math.abs(accelY) < thresholds.STABLE) {
-      const subirTime =
-        subirStartTime && descerStartTime
-          ? (descerStartTime - subirStartTime) / 1000
+      const standTime =
+        standStartTime && sitStartTime
+          ? (sitStartTime - standStartTime) / 1000
           : 0;
-      const descerTime = descerStartTime
-        ? (timestamp - descerStartTime) / 1000
-        : 0;
+      const sitTime = sitStartTime ? (timestamp - sitStartTime) / 1000 : 0;
       const totalTime = cycleStartTime
         ? (timestamp - cycleStartTime) / 1000
         : 0;
 
-      const cycle: CycleData = {
-        TOT: totalTime,
-        SUBIR: subirTime,
-        DESCER: descerTime,
+      return {
+        cycle: {
+          tot: totalTime,
+          stand: standTime,
+          sit: sitTime,
+        },
       };
-      return { cycle };
     }
     return null;
   }
 
-  processSensorData(sensorData: SensorData[]): SensorBlock {
-    const sortedData = [...sensorData].sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-    );
-
-    const columns = ['T', 'ax', 'ay', 'az', 'gx', 'gy', 'gz'];
-
-    const data = sortedData.map((sensor) => [
-      sensor.timestamp.getTime(),
-      sensor.accel_x,
-      sensor.accel_y,
-      sensor.accel_z,
-      sensor.gyro_x,
-      sensor.gyro_y,
-      sensor.gyro_z,
-    ]);
-
-    const stats = this.calculateSensorStats(sortedData);
-
-    return {
-      format: 'Cd',
-      Column: columns,
-      Data: data,
-      STATS: stats,
-    };
-  }
-
-  calculateDerivedIndicators(
-    cycleBlock: CycleBlock,
-    timeInit: Date,
-    timeEnd: Date,
-  ): DerivedBlock {
-    const cycles = [
-      cycleBlock.C1,
-      cycleBlock.C2,
-      cycleBlock.C3,
-      cycleBlock.C4,
-      cycleBlock.C5,
-    ].filter((c) => c.TOT > 0);
-
-    const indicators: DerivedIndicator[] = [];
-
-    const tempoTotalTeste = (timeEnd.getTime() - timeInit.getTime()) / 1000;
-    indicators.push({ NAME: 'TEMPO_TOTAL_TESTE', VALUE: tempoTotalTeste });
-    indicators.push({ NAME: 'TEMPO', VALUE: tempoTotalTeste });
-
-    if (cycles.length > 0) {
-      const tempoMedioCiclo =
-        cycles.reduce((sum, cycle) => sum + cycle.TOT, 0) / cycles.length;
-      indicators.push({ NAME: 'TEMPO_MEDIO_CICLO', VALUE: tempoMedioCiclo });
-
-      const tempoMedioSubir =
-        cycles.reduce((sum, cycle) => sum + cycle.SUBIR, 0) / cycles.length;
-      indicators.push({ NAME: 'TEMPO_MEDIO_SUBIR', VALUE: tempoMedioSubir });
-
-      const tempoMedioDescer =
-        cycles.reduce((sum, cycle) => sum + cycle.DESCER, 0) / cycles.length;
-      indicators.push({ NAME: 'TEMPO_MEDIO_DESCER', VALUE: tempoMedioDescer });
-    } else {
-      indicators.push({ NAME: 'TEMPO_MEDIO_CICLO', VALUE: 0 });
-      indicators.push({ NAME: 'TEMPO_MEDIO_SUBIR', VALUE: 0 });
-      indicators.push({ NAME: 'TEMPO_MEDIO_DESCER', VALUE: 0 });
-    }
-
-    return {
-      INDICATORS: indicators,
-    };
-  }
-
-  private calculateSensorStats(sensorData: SensorData[]): SensorBlock['STATS'] {
+  private calculateSensorStats(
+    sensorData: SensorData[],
+  ): Record<string, SensorAxisStats> {
     const stats: Record<string, SensorAxisStats> = {};
 
     const axisMap = {
@@ -271,40 +367,67 @@ export class SensorDataProcessorService {
       gz: 'gyro_z',
     } as const;
 
-    for (const [axisName, dataKey] of Object.entries(axisMap)) {
-      const values = sensorData.map((sensor) => sensor[dataKey]);
+    for (const [jsonKey, dbKey] of Object.entries(axisMap)) {
+      const values = sensorData.map((sensor) => Number(sensor[dbKey]));
 
       if (values.length > 0) {
         const min = Math.min(...values);
         const max = Math.max(...values);
         const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
 
-        stats[axisName] = { MIN: min, MAX: max, MEAN: mean };
+        stats[jsonKey] = { min, max, mean };
       }
     }
     return stats;
   }
 
-  private calculateMinCycle(cycles: CycleData[]): CycleData {
-    if (cycles.length === 0) return { TOT: 0, SUBIR: 0, DESCER: 0 };
-
-    const validCycles = cycles.filter((c) => c.TOT > 0);
-    if (validCycles.length === 0) return { TOT: 0, SUBIR: 0, DESCER: 0 };
+  private calculateMinCycle(
+    cycles: { tot: number; stand: number; sit: number }[],
+  ) {
+    const validCycles = cycles.filter((c) => c.tot > 0);
+    if (validCycles.length === 0) return { tot: 0, stand: 0, sit: 0 };
 
     return {
-      TOT: Math.min(...validCycles.map((c) => c.TOT)),
-      SUBIR: Math.min(...validCycles.map((c) => c.SUBIR)),
-      DESCER: Math.min(...validCycles.map((c) => c.DESCER)),
+      tot: Math.min(...validCycles.map((c) => c.tot)),
+      stand: Math.min(...validCycles.map((c) => c.stand)),
+      sit: Math.min(...validCycles.map((c) => c.sit)),
     };
   }
 
-  private calculateMaxCycle(cycles: CycleData[]): CycleData {
-    if (cycles.length === 0) return { TOT: 0, SUBIR: 0, DESCER: 0 };
+  private calculateMaxCycle(
+    cycles: { tot: number; stand: number; sit: number }[],
+  ) {
+    const validCycles = cycles.filter((c) => c.tot > 0);
+    if (validCycles.length === 0) return { tot: 0, stand: 0, sit: 0 };
 
     return {
-      TOT: Math.max(...cycles.map((c) => c.TOT)),
-      SUBIR: Math.max(...cycles.map((c) => c.SUBIR)),
-      DESCER: Math.max(...cycles.map((c) => c.DESCER)),
+      tot: Math.max(...validCycles.map((c) => c.tot)),
+      stand: Math.max(...validCycles.map((c) => c.stand)),
+      sit: Math.max(...validCycles.map((c) => c.sit)),
+    };
+  }
+
+  private calculateAvgCycle(
+    cycles: { tot: number; stand: number; sit: number }[],
+  ) {
+    const validCycles = cycles.filter((c) => c.tot > 0);
+    if (validCycles.length === 0) return { tot: 0, stand: 0, sit: 0 };
+
+    const sum = validCycles.reduce(
+      (acc, curr) => ({
+        tot: acc.tot + curr.tot,
+        stand: acc.stand + curr.stand,
+        sit: acc.sit + curr.sit,
+      }),
+      { tot: 0, stand: 0, sit: 0 },
+    );
+
+    const count = validCycles.length;
+
+    return {
+      tot: parseFloat((sum.tot / count).toFixed(2)),
+      stand: parseFloat((sum.stand / count).toFixed(2)),
+      sit: parseFloat((sum.sit / count).toFixed(2)),
     };
   }
 }

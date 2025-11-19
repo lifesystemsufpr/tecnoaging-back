@@ -12,7 +12,7 @@ import {
 import { BaseService } from 'src/shared/services/base.service';
 import { FilterEvaluationDto } from '../dto/filter-evaluation.dto';
 import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
-import { EvaluationDetailResponseDto } from '../dto/evaluation-detail-response.dto';
+import { EvaluationResponse as EvaluationDetailResponse } from '../dto/evaluation-detail-response.dto';
 import { SensorDataProcessorService } from './sensor-data-processor.service';
 
 type EvaluationWithDetails = Evaluation & {
@@ -101,11 +101,14 @@ export class EvaluationService extends BaseService<
     return this.transform(evaluation as unknown as EvaluationWithDetails);
   }
 
-  async findOneDetailed(id: string): Promise<EvaluationDetailResponseDto> {
+  async findOneDetailed(id: string): Promise<EvaluationDetailResponse> {
     const evaluation = await this.prisma.evaluation.findUnique({
       where: { id },
       include: {
         sensorData: true,
+        patient: {
+          select: { birthday: true },
+        },
       },
     });
 
@@ -116,17 +119,22 @@ export class EvaluationService extends BaseService<
     );
     const cycleBlock = this.sensorProcessor.detectCycles(evaluation.sensorData);
 
+    const patientAge = this.calculateAge(
+      evaluation.patient.birthday,
+      evaluation.date,
+    );
+
     const derivedBlock = this.sensorProcessor.calculateDerivedIndicators(
       cycleBlock,
       evaluation.time_init,
       evaluation.time_end,
+      patientAge,
     );
 
     return {
-      id: evaluation.id,
-      SENSOR: sensorBlock,
-      CYCLE: cycleBlock,
-      DERIVED: derivedBlock,
+      sensor: sensorBlock,
+      cycle: cycleBlock,
+      derived: derivedBlock,
     };
   }
 
@@ -289,5 +297,14 @@ export class EvaluationService extends BaseService<
 
       return deletedEvaluation;
     });
+  }
+
+  private calculateAge(birthDate: Date, referenceDate: Date): number {
+    let age = referenceDate.getFullYear() - birthDate.getFullYear();
+    const m = referenceDate.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && referenceDate.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   }
 }
