@@ -7,7 +7,7 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { EvaluationService } from './evaluation.service';
+import { EvaluationService } from './services/evaluation.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   ApiBearerAuth,
@@ -31,13 +31,21 @@ export class EvaluationController {
   }
 
   @Get()
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   findAll(@Query() filters: FilterEvaluationDto) {
-    return this.evaluationService.findAll(filters);
+    return this.evaluationService.filter(filters);
   }
 
   @Get(':id')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   findOne(@Param('id') id: string) {
     return this.evaluationService.findOne(id);
+  }
+
+  @Get(':id/detailed')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
+  async findOneDetailed(@Param('id') id: string) {
+    return this.evaluationService.findOneDetailed(id);
   }
 
   @Delete(':id')
