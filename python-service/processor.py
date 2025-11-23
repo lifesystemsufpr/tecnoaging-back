@@ -7,7 +7,6 @@ from ahrs.common.orientation import q2euler
 
 class STSProcessor:
     def __init__(self, data_list, peso, altura, idade, sexo):
-        # Recebe os dados da API (NestJS) em vez de ler CSV
         self.raw_data = data_list
         self.body_mass = peso
         self.h = altura
@@ -26,12 +25,12 @@ class STSProcessor:
         # para não precisar alterar o restante do script
         mapa_colunas = {
             'timestamp': 'loggingSample(N)',
-            'accX': 'accelerometerAccelerationX(G)',
-            'accY': 'accelerometerAccelerationY(G)',
-            'accZ': 'accelerometerAccelerationZ(G)',
-            'gyroX': 'gyroRotationX(rad/s)',
-            'gyroY': 'gyroRotationY(rad/s)',
-            'gyroZ': 'gyroRotationZ(rad/s)'
+            'accel_x': 'accelerometerAccelerationX(G)',
+            'accel_y': 'accelerometerAccelerationY(G)',
+            'accel_z': 'accelerometerAccelerationZ(G)',
+            'gyro_x': 'gyroRotationX(rad/s)',
+            'gyro_y': 'gyroRotationY(rad/s)',
+            'gyro_z': 'gyroRotationZ(rad/s)'
         }
         dados_cel = dados_cel.rename(columns=mapa_colunas)
         
@@ -41,7 +40,7 @@ class STSProcessor:
 
         fs = self.fs 
 
-        # --- INICIO DO SCRIPT ORIGINAL (CÓPIA FIEL) ---
+        # --- INICIO DO SCRIPT ORIGINAL --- #
 
         # --- Dados do celular ---
         frame_cel = dados_cel['loggingSample(N)']

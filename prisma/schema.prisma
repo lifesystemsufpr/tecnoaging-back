@@ -99,11 +99,13 @@ model SensorData {
   gyro_x       Float
   gyro_y       Float
   gyro_z       Float
+  filtered     Boolean    @default(false)
   evaluationId String
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
 
   @@index([evaluationId])
   @@index([timestamp])
+  @@index([evaluationId, filtered])
   @@map("sensor_data")
 }
 
@@ -127,6 +129,7 @@ model Evaluation {
   @@index([healthcareUnitId])
   @@index([date])
   @@index([type])
+  @@index([time_end(sort: Desc)])
   @@map("evaluation")
 }
 

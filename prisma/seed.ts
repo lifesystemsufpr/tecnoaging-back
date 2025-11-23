@@ -8,15 +8,16 @@ import {
 } from '@prisma/client';
 import { hashPassword } from '../src/shared/functions/hash-password';
 import { normalizeString } from '../src/shared/functions/normalize-string';
+// Certifique-se de ter instalado: npm install @faker-js/faker
+import { fakerPT_BR as faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
-// eslint-disable-next-line sonarjs/no-hardcoded-passwords
-const password = 'senha123';
 
 async function main() {
-  console.log('🌱 Iniciando o processo de seed...');
+  console.log('🌱 Iniciando o Seed Completo...');
 
-  console.log('🗑️ Limpando dados existentes...');
+  // 1. Limpeza
+  console.log('🗑️ Limpando dados antigos...');
   await prisma.sensorData.deleteMany({});
   await prisma.evaluation.deleteMany({});
   await prisma.patient.deleteMany({});
@@ -25,153 +26,215 @@ async function main() {
   await prisma.user.deleteMany({});
   await prisma.institution.deleteMany({});
   await prisma.healthcareUnit.deleteMany({});
-  console.log('✅ Dados limpos.');
 
-  console.log('🏥 Criando Unidades de Saúde e Instituições...');
+  // 2. Preparação: Senha padrão
+  const passwordHash = await hashPassword('senha123');
 
-  const healthcareUnitName = 'UBS Centro de Saúde';
-  const institutionTitle = 'Universidade Federal do Paraná (UFPR)';
+  // ==================================================
+  // 3. USUÁRIOS FIXOS (PARA LOGIN)
+  // ==================================================
 
-  const healthcareUnit = await prisma.healthcareUnit.create({
-    data: {
-      name: healthcareUnitName,
-      name_normalized: normalizeString(healthcareUnitName) || '',
-      zipCode: '80020000',
-      street: 'Rua XV de Novembro',
-      number: '123',
-      complement: 'Sala 1',
-      neighborhood: 'Centro',
-      city: 'Curitiba',
-      state: 'PR',
-    },
-  });
+  console.log('👑 Criando Usuários Fixos...');
 
-  const institution = await prisma.institution.create({
-    data: {
-      title: institutionTitle,
-      title_normalized: normalizeString(institutionTitle) || '',
-    },
-  });
-  console.log('✅ Unidades e Instituições criadas.');
-
-  console.log('👤 Criando usuários e perfis...');
-
-  const managerName = 'GERENTE DO SISTEMA';
+  // 3.1 ADMIN (Manager)
   await prisma.user.create({
     data: {
       cpf: '00000000000',
-      fullName: managerName,
-      fullName_normalized: normalizeString(managerName) || '',
+      fullName: 'Admin do Sistema',
+      fullName_normalized: 'admin do sistema',
       gender: Gender.OTHER,
-      password: await hashPassword(password),
+      password: passwordHash,
       role: SystemRole.MANAGER,
     },
   });
 
-  const healthProName = 'Dra. Ana Costa';
-  const healthProSpeciality = 'Fisioterapia';
-  const healthProfessional = await prisma.user.create({
+  // 3.2 MÉDICO FIXO (Para testar a visão do profissional)
+  const fixedDoctor = await prisma.user.create({
     data: {
       cpf: '11111111111',
-      fullName: healthProName,
-      fullName_normalized: normalizeString(healthProName) || '',
+      fullName: 'Dra. Ana Fixa',
+      fullName_normalized: 'dra. ana fixa',
       gender: Gender.FEMALE,
-      password: await hashPassword(password),
+      password: passwordHash,
       role: SystemRole.HEALTH_PROFESSIONAL,
       healthProfessional: {
         create: {
-          email: 'ana.costa@email.com',
-          speciality: healthProSpeciality,
-          speciality_normalized: normalizeString(healthProSpeciality) || '',
+          email: 'ana.fixa@teste.com',
+          speciality: 'Geral',
+          speciality_normalized: 'geral',
         },
       },
     },
+    include: { healthProfessional: true },
   });
 
-  const researcherName = 'Dr. Bruno Lima';
-  await prisma.user.create({
+  // Lista de IDs de profissionais para distribuir pacientes (começa com a fixa)
+  const healthProsIds: string[] = [];
+  if (fixedDoctor.healthProfessional) {
+    healthProsIds.push(fixedDoctor.healthProfessional.id);
+  }
+
+  // ==================================================
+  // 4. ESTRUTURA (INSTITUIÇÃO E UNIDADES)
+  // ==================================================
+  console.log('🏥 Criando Estrutura...');
+
+  await prisma.institution.create({
     data: {
-      cpf: '22222222222',
-      fullName: researcherName,
-      fullName_normalized: normalizeString(researcherName) || '',
-      gender: Gender.MALE,
-      password: await hashPassword(password),
-      role: SystemRole.RESEARCHER,
-      researcher: {
-        create: {
-          email: 'bruno.lima@email.com',
-          fieldOfStudy: 'Engenharia Biomédica',
-          institutionId: institution.id,
-        },
-      },
+      title: 'UFPR',
+      title_normalized: normalizeString('UFPR') || 'ufpr',
     },
   });
 
-  const patientName = 'Carlos Andrade';
-  const patient = await prisma.user.create({
-    data: {
-      cpf: '33333333333',
-      fullName: patientName,
-      fullName_normalized: normalizeString(patientName) || '',
-      gender: Gender.MALE,
-      password: await hashPassword(password),
-      role: SystemRole.PATIENT,
-      patient: {
-        create: {
-          birthday: new Date('1953-07-15T00:00:00.000Z'),
-          scholarship: Scholarship.HIGHER_EDUCATION_COMPLETE,
-          socio_economic_level: SocialEconomicLevel.B,
-          weight: 78,
-          height: 175,
-          zipCode: '80040000',
-          street: 'Rua das Palmeiras',
-          number: '789',
-          neighborhood: 'Alto da Glória',
-          city: 'Curitiba',
-          state: 'PR',
+  const units = await Promise.all([
+    prisma.healthcareUnit.create({
+      data: {
+        name: 'UBS Centro',
+        name_normalized: normalizeString('UBS Centro') || 'ubs centro',
+        zipCode: '80000000',
+        street: 'Rua XV',
+        number: '10',
+        city: 'Curitiba',
+        state: 'PR',
+        neighborhood: 'Centro',
+      },
+    }),
+    prisma.healthcareUnit.create({
+      data: {
+        name: 'Hospital de Clínicas',
+        name_normalized:
+          normalizeString('Hospital de Clínicas') || 'hospital de clinicas',
+        zipCode: '80060000',
+        street: 'General Carneiro',
+        number: '181',
+        city: 'Curitiba',
+        state: 'PR',
+        neighborhood: 'Alto da Glória',
+      },
+    }),
+  ]);
+
+  // ==================================================
+  // 5. DADOS ALEATÓRIOS (VOLUME)
+  // ==================================================
+
+  // 5.1 Criar mais 5 Profissionais aleatórios
+  console.log('👨‍⚕️ Criando Profissionais Aleatórios...');
+  for (let i = 0; i < 5; i++) {
+    const name = faker.person.fullName();
+    const hpUser = await prisma.user.create({
+      data: {
+        cpf: faker.string.numeric(11),
+        fullName: name,
+        fullName_normalized: normalizeString(name) || name.toLowerCase(),
+        gender: i % 2 === 0 ? Gender.MALE : Gender.FEMALE,
+        password: passwordHash,
+        role: SystemRole.HEALTH_PROFESSIONAL,
+        healthProfessional: {
+          create: {
+            email: faker.internet.email(),
+            speciality: 'Fisioterapia',
+            speciality_normalized:
+              normalizeString('Fisioterapia') || 'fisioterapia',
+          },
         },
       },
-    },
-  });
-  console.log('✅ Usuários e perfis criados.');
+      include: { healthProfessional: true },
+    });
 
-  console.log('📊 Criando avaliação com dados de sensor...');
-  await prisma.evaluation.create({
-    data: {
-      type: TypeEvaluation.FTSTS,
-      patientId: patient.id,
-      healthProfessionalId: healthProfessional.id,
-      healthcareUnitId: healthcareUnit.id,
-      date: new Date(),
-      time_init: new Date(),
-      time_end: new Date(new Date().getTime() + 15000),
-      sensorData: {
-        createMany: {
-          data: [
-            {
-              timestamp: new Date(),
-              accel_x: 0.1,
-              accel_y: 0.2,
-              gyro_x: 0.3,
-              gyro_y: 0.4,
-              gyro_z: 0.5,
+    if (hpUser.healthProfessional) {
+      healthProsIds.push(hpUser.healthProfessional.id);
+    }
+  }
+
+  // 5.2 Criar 20 Pacientes e suas Avaliações
+  console.log('👴 Criando 20 Pacientes e Avaliações...');
+
+  for (let i = 0; i < 20; i++) {
+    const sex = i % 2 === 0 ? 'male' : 'female';
+    const name = faker.person.fullName({ sex });
+
+    const patientUser = await prisma.user.create({
+      data: {
+        cpf: faker.string.numeric(11),
+        fullName: name,
+        fullName_normalized: normalizeString(name) || name.toLowerCase(),
+        gender: sex === 'male' ? Gender.MALE : Gender.FEMALE,
+        password: passwordHash,
+        role: SystemRole.PATIENT,
+        patient: {
+          create: {
+            birthday: faker.date.birthdate({ min: 60, max: 90, mode: 'age' }),
+            weight: faker.number.int({ min: 50, max: 100 }),
+            height: faker.number.int({ min: 150, max: 190 }),
+            zipCode: '80000000',
+            street: faker.location.street(),
+            number: String(faker.number.int({ min: 1, max: 1000 })),
+            city: 'Curitiba',
+            state: 'PR',
+            neighborhood: 'Batel',
+            socio_economic_level: SocialEconomicLevel.C,
+            scholarship: Scholarship.HIGH_SCHOOL_COMPLETE,
+          },
+        },
+      },
+      include: { patient: true },
+    });
+
+    if (!patientUser.patient) continue;
+    const patientId = patientUser.patient.id;
+
+    // Cria de 1 a 3 avaliações por paciente
+    const numEvals = faker.number.int({ min: 1, max: 3 });
+
+    for (let j = 0; j < numEvals; j++) {
+      // Sorteia um profissional (pode cair na Dra. Ana Fixa) e uma unidade
+      const randomHPId =
+        healthProsIds[Math.floor(Math.random() * healthProsIds.length)];
+      const randomUnit = units[Math.floor(Math.random() * units.length)];
+
+      // Datas recentes
+      const date = faker.date.recent({ days: 60 });
+      const timeInit = new Date(date);
+      const timeEnd = new Date(date.getTime() + 30000); // +30s
+
+      // 100 pontos de dados de sensor (Simulação)
+      const sensorDataMock = Array.from({ length: 100 }).map((_, idx) => ({
+        timestamp: new Date(timeInit.getTime() + idx * 20), // 50Hz
+        accel_x: faker.number.float({ min: -2, max: 2 }),
+        accel_y: faker.number.float({ min: -2, max: 2 }),
+        accel_z: faker.number.float({ min: 9, max: 10 }),
+        gyro_x: faker.number.float({ min: -1, max: 1 }),
+        gyro_y: faker.number.float({ min: -1, max: 1 }),
+        gyro_z: faker.number.float({ min: -1, max: 1 }),
+        filtered: false,
+      }));
+
+      await prisma.evaluation.create({
+        data: {
+          type: TypeEvaluation.FTSTS,
+          date: date,
+          time_init: timeInit,
+          time_end: timeEnd,
+          patientId: patientId,
+          healthProfessionalId: randomHPId,
+          healthcareUnitId: randomUnit.id,
+          sensorData: {
+            createMany: {
+              data: sensorDataMock,
             },
-            {
-              timestamp: new Date(new Date().getTime() + 100),
-              accel_x: 0.12,
-              accel_y: 0.23,
-              gyro_x: 0.34,
-              gyro_y: 0.45,
-              gyro_z: 0.56,
-            },
-          ],
+          },
         },
-      },
-    },
-  });
-  console.log('✅ Avaliação criada.');
+      });
+    }
+  }
 
-  console.log('🎉 Seed concluído com sucesso!');
+  console.log('✅ Seed concluído com sucesso!');
+  console.log('------------------------------------------------');
+  console.log('🔑 CREDENCIAIS PARA LOGIN:');
+  console.log('   ADMIN:   CPF: 00000000000 / Senha: senha123');
+  console.log('   MÉDICO:  CPF: 11111111111 / Senha: senha123');
+  console.log('------------------------------------------------');
 }
 
 main()

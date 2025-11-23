@@ -5,15 +5,17 @@ from processor import STSProcessor
 
 app = FastAPI()
 
-# Deve bater com o que o NestJS envia no payload
+# Modelo alinhado com o seu Schema Prisma (snake_case)
 class SensorData(BaseModel):
-    accX: float
-    accY: float
-    accZ: float
-    gyroX: float
-    gyroY: float
-    gyroZ: float
-    timestamp: Optional[float] = 0 
+    id: Optional[str] = None 
+    timestamp: float 
+    accel_x: float
+    accel_y: float
+    accel_z: float
+    gyro_x: float
+    gyro_y: float
+    gyro_z: float
+    # evaluationId e filtered não precisam vir para o python processar
 
 class RequestBody(BaseModel):
     dados: List[SensorData]
@@ -25,10 +27,9 @@ class RequestBody(BaseModel):
 @app.post("/processar")
 def processar_sts(body: RequestBody):
     try:
-        # converte a lista de objetos Pydantic para lista de dicionários que o pandas entende
+        # Converte para lista de dicts
         raw_data = [d.dict() for d in body.dados]
         
-        # instancia a classe que contém a lógica do Notebook
         processor = STSProcessor(
             data_list=raw_data,
             peso=body.peso,
@@ -37,14 +38,9 @@ def processar_sts(body: RequestBody):
             sexo=body.sexo
         )
         
-        # Executa o processamento
         resultado = processor.run()
-        
         return resultado
         
     except Exception as e:
-        print(f"Erro interno no processamento Python: {e}")
+        print(f"Erro interno Python: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# comando pra rodar o serv:
-# uvicorn main:app --reload --port 8000
