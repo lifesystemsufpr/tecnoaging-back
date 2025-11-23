@@ -157,14 +157,14 @@ export class EvaluationService extends BaseService<
       altura: perfilUsuario.altura,
       idade: perfilUsuario.idade,
       sexo: perfilUsuario.sexo,
-      dados: dadosBrutos.map((d) => ({
+      dados: dadosBrutos.map((d, i) => ({
         accel_x: d.accel_x,
         accel_y: d.accel_y,
         accel_z: d.accel_z,
         gyro_x: d.gyro_x,
         gyro_y: d.gyro_y,
         gyro_z: d.gyro_z,
-        timestamp: d.timestamp.getTime(),
+        timestamp: i + 1,
       })),
     };
 

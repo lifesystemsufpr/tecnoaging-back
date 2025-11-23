@@ -17,6 +17,7 @@ import {
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('evaluation')
 @ApiBearerAuth()
@@ -45,5 +46,15 @@ export class EvaluationController {
   @ApiNoContentResponse()
   remove(@Param('id') id: string) {
     return this.evaluationService.remove(id);
+  }
+
+  @Post(':id/process')
+  @Public()
+  process(
+    @Param('id') id: string,
+    @Body()
+    body: { peso: number; altura: number; idade: number; sexo: string },
+  ) {
+    return this.evaluationService.processarDadosDoTeste(id, body);
   }
 }

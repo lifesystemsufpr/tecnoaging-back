@@ -199,16 +199,28 @@ async function main() {
       const timeEnd = new Date(date.getTime() + 30000); // +30s
 
       // 100 pontos de dados de sensor (Simulação)
-      const sensorDataMock = Array.from({ length: 100 }).map((_, idx) => ({
-        timestamp: new Date(timeInit.getTime() + idx * 20), // 50Hz
-        accel_x: faker.number.float({ min: -2, max: 2 }),
-        accel_y: faker.number.float({ min: -2, max: 2 }),
-        accel_z: faker.number.float({ min: 9, max: 10 }),
-        gyro_x: faker.number.float({ min: -1, max: 1 }),
-        gyro_y: faker.number.float({ min: -1, max: 1 }),
-        gyro_z: faker.number.float({ min: -1, max: 1 }),
-        filtered: false,
-      }));
+      const sensorDataMock = Array.from({ length: 300 }).map((_, idx) => {
+        // Cria uma onda senoidal para simular o movimento repetitivo
+        // O movimento de sentar/levantar altera o ângulo (Giroscópio) e a aceleração
+        const wave = Math.sin(idx * 0.2);
+
+        return {
+          timestamp: new Date(timeInit.getTime() + idx * 20), // 20ms = 50Hz
+
+          // Simula movimento forte no eixo X (tronco indo pra frente/trás)
+          accel_x: wave * 0.5,
+          accel_y: faker.number.float({ min: -0.1, max: 0.1 }),
+          // Aceleração vertical variando em torno da gravidade (1G)
+          accel_z: 1.0 + wave * 0.5,
+
+          // Simula rotação (Giroscópio) acompanhando o movimento
+          gyro_x: faker.number.float({ min: -0.1, max: 0.1 }),
+          gyro_y: wave * 2.0, // Rotação forte no eixo Y (Pitch - inclinação)
+          gyro_z: faker.number.float({ min: -0.1, max: 0.1 }),
+
+          filtered: false,
+        };
+      });
 
       await prisma.evaluation.create({
         data: {
