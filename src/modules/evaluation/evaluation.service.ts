@@ -211,7 +211,7 @@ export class EvaluationService extends BaseService<
         ),
       );
 
-      const dadosParaSalvar = result.timeseries_filtrada.map((p) => ({
+      const dataToSave = result.timeseries_filtrada.map((p) => ({
         evaluationId: evaluationId,
         filtered: true,
         timestamp: new Date(dataInicial + p.time_offset * 1000),
@@ -225,7 +225,7 @@ export class EvaluationService extends BaseService<
 
       await this.prisma.$transaction([
         this.prisma.sensorData.createMany({
-          data: dadosParaSalvar,
+          data: dataToSave,
         }),
         this.prisma.evaluationIndicators.create({
           data: {
