@@ -115,18 +115,44 @@ export class EvaluationService extends BaseService<
     };
   }
 
-  create(createEvaluationDto: CreateEvaluationDto) {
-    const { sensorData, ...evaluation } = createEvaluationDto;
-    return this.prisma.evaluation.create({
+  async create(createEvaluationDto: CreateEvaluationDto) {
+    const { sensorData, ...evaluationData } = createEvaluationDto;
+
+    const evaluation = await this.prisma.evaluation.create({
       data: {
-        ...evaluation,
+        ...evaluationData,
         sensorData: {
           createMany: {
             data: sensorData,
           },
         },
       },
+      include: {
+        patient: {
+          include: {
+            user: true,
+          },
+        },
+      },
     });
+
+    const age = this.calculateAge(evaluation.patient.birthday, new Date());
+
+    const perfilUsuario = {
+      peso: evaluation.patient.weight,
+      altura: evaluation.patient.height,
+      sexo: evaluation.patient.user.gender,
+      idade: age,
+    };
+
+    this.processarDadosDoTeste(evaluation.id, perfilUsuario).catch((err) => {
+      this.logger.error(
+        `Erro ao processar automaticamente avaliação ${evaluation.id}`,
+        err,
+      );
+    });
+
+    return evaluation;
   }
 
   async processarDadosDoTeste(
@@ -408,5 +434,14 @@ export class EvaluationService extends BaseService<
 
       return deletedEvaluation;
     });
+  }
+
+  private calculateAge(birthDate: Date, referenceDate: Date): number {
+    let age = referenceDate.getFullYear() - birthDate.getFullYear();
+    const m = referenceDate.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && referenceDate.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   }
 }
