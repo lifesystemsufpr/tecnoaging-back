@@ -16,6 +16,9 @@ const transformEvaluationType = ({ value }: { value: string }) => {
   if (value === '5TSTS') {
     return 'FTSTS';
   }
+  if (value === '30TSTS') {
+    return 'TTSTS';
+  }
   return value;
 };
 
