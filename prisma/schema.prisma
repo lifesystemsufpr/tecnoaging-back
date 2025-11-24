@@ -234,4 +234,5 @@ enum SocialEconomicLevel {
 enum TypeEvaluation {
   FTSTS
   TTSTS
+
 }

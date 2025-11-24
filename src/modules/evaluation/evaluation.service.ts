@@ -32,6 +32,7 @@ export type EvaluationResponse = Omit<
   healthProfessional: FormattedHP;
 };
 
+// Interface matching the Python Service response (keys kept in PT-BR as per Python script)
 interface PythonResponse {
   timeseries_filtrada: {
     time_offset: number;
@@ -65,6 +66,22 @@ type EvaluationQueryResult = Omit<
     user: Pick<User, 'fullName' | 'cpf'>;
   };
 };
+
+interface SensorStat {
+  min: number;
+  max: number;
+  sum: number;
+}
+
+interface SensorStatsMap {
+  ax: SensorStat;
+  ay: SensorStat;
+  az: SensorStat;
+  gx: SensorStat;
+  gy: SensorStat;
+  gz: SensorStat;
+  count: number;
+}
 
 @Injectable()
 export class EvaluationService extends BaseService<
@@ -143,16 +160,17 @@ export class EvaluationService extends BaseService<
 
     const age = this.calculateAge(evaluation.patient.birthday, new Date());
 
-    const perfilUsuario = {
-      peso: evaluation.patient.weight,
-      altura: evaluation.patient.height,
-      sexo: evaluation.patient.user.gender,
-      idade: age,
+    const userProfile = {
+      weight: evaluation.patient.weight,
+      height: evaluation.patient.height,
+      sex: evaluation.patient.user.gender,
+      age: age,
     };
 
-    this.processarDadosDoTeste(evaluation.id, perfilUsuario).catch((err) => {
+    // Fire and Forget processing
+    this.processEvaluationData(evaluation.id, userProfile).catch((err) => {
       this.logger.error(
-        `Erro ao processar automaticamente avaliação ${evaluation.id}`,
+        `Error processing evaluation ${evaluation.id} automatically`,
         err,
       );
     });
@@ -160,16 +178,16 @@ export class EvaluationService extends BaseService<
     return evaluation;
   }
 
-  async processarDadosDoTeste(
+  async processEvaluationData(
     evaluationId: string,
-    perfilUsuario: {
-      peso: number;
-      altura: number;
-      idade: number;
-      sexo: string;
+    userProfile: {
+      weight: number;
+      height: number;
+      age: number;
+      sex: string;
     },
   ) {
-    const dadosBrutos = await this.prisma.sensorData.findMany({
+    const rawData = await this.prisma.sensorData.findMany({
       where: {
         evaluationId: evaluationId,
         filtered: false,
@@ -177,25 +195,26 @@ export class EvaluationService extends BaseService<
       orderBy: { timestamp: 'asc' },
     });
 
-    if (!dadosBrutos.length) {
-      throw new NotFoundException('Nenhum dado bruto encontrado.');
+    if (!rawData.length) {
+      throw new NotFoundException('No raw sensor data found.');
     }
 
-    const dataInicial = dadosBrutos[0].timestamp.getTime();
+    const initialTimestamp = rawData[0].timestamp.getTime();
 
-    const payloadPython = {
-      peso: perfilUsuario.peso,
-      altura: perfilUsuario.altura,
-      idade: perfilUsuario.idade,
-      sexo: perfilUsuario.sexo,
-      dados: dadosBrutos.map((d, i) => ({
+    // Constructing payload for Python (Keys must remain in PT-BR/Snake Case as expected by the script)
+    const pythonPayload = {
+      peso: userProfile.weight,
+      altura: userProfile.height,
+      idade: userProfile.age,
+      sexo: userProfile.sex,
+      dados: rawData.map((d, i) => ({
         accel_x: d.accel_x,
         accel_y: d.accel_y,
         accel_z: d.accel_z,
         gyro_x: d.gyro_x,
         gyro_y: d.gyro_y,
         gyro_z: d.gyro_z,
-        timestamp: i + 1,
+        timestamp: i + 1, // Sending frame index instead of raw timestamp
       })),
     };
 
@@ -207,14 +226,14 @@ export class EvaluationService extends BaseService<
       const { data: result } = await lastValueFrom(
         this.httpService.post<PythonResponse>(
           `${pythonUrl}/processar`,
-          payloadPython,
+          pythonPayload,
         ),
       );
 
       const dataToSave = result.timeseries_filtrada.map((p) => ({
         evaluationId: evaluationId,
         filtered: true,
-        timestamp: new Date(dataInicial + p.time_offset * 1000),
+        timestamp: new Date(initialTimestamp + p.time_offset * 1000),
         accel_x: p.accel_x,
         accel_y: p.accel_y,
         accel_z: p.accel_z,
@@ -230,6 +249,7 @@ export class EvaluationService extends BaseService<
         this.prisma.evaluationIndicators.create({
           data: {
             evaluationId: evaluationId,
+            // Mapping Python response (PT) to Database (EN)
             repetitionCount: result.metricas.num_repeticoes,
             meanPower: result.metricas.potencia_media,
             totalEnergy: result.metricas.energia_total,
@@ -240,8 +260,8 @@ export class EvaluationService extends BaseService<
 
       return result.metricas;
     } catch (error) {
-      this.logger.error('Erro na comunicação com Python', error);
-      throw new Error('Falha ao processar dados biomecânicos.');
+      this.logger.error('Error communicating with Python service', error);
+      throw new Error('Failed to process biomechanical data.');
     }
   }
 
@@ -255,6 +275,145 @@ export class EvaluationService extends BaseService<
     });
 
     return this.transform(evaluation as unknown as EvaluationWithDetails);
+  }
+
+  async findOneDetailed(id: string) {
+    const evaluation = await this.prisma.evaluation.findUnique({
+      where: { id },
+      include: {
+        sensorData: {
+          where: { filtered: true },
+          orderBy: { timestamp: 'asc' },
+        },
+        indicators: true,
+        patient: {
+          select: { birthday: true },
+        },
+      },
+    });
+
+    if (!evaluation) throw new NotFoundException('Evaluation not found');
+
+    // 1. Format SENSOR block (Columns + Stats)
+    const initialStats: SensorStatsMap = {
+      ax: { min: Infinity, max: -Infinity, sum: 0 },
+      ay: { min: Infinity, max: -Infinity, sum: 0 },
+      az: { min: Infinity, max: -Infinity, sum: 0 },
+      gx: { min: Infinity, max: -Infinity, sum: 0 },
+      gy: { min: Infinity, max: -Infinity, sum: 0 },
+      gz: { min: Infinity, max: -Infinity, sum: 0 },
+      count: 0,
+    };
+
+    const sensorDataFormatted: number[][] = [];
+
+    for (const s of evaluation.sensorData) {
+      sensorDataFormatted.push([
+        s.timestamp.getTime(),
+        s.accel_x,
+        s.accel_y,
+        s.accel_z,
+        s.gyro_x,
+        s.gyro_y,
+        s.gyro_z,
+      ]);
+
+      this.updateStat(initialStats.ax, s.accel_x);
+      this.updateStat(initialStats.ay, s.accel_y);
+      this.updateStat(initialStats.az, s.accel_z);
+      this.updateStat(initialStats.gx, s.gyro_x);
+      this.updateStat(initialStats.gy, s.gyro_y);
+      this.updateStat(initialStats.gz, s.gyro_z);
+      initialStats.count++;
+    }
+
+    const finalStats = {
+      ax: this.calculateMean(initialStats.ax, initialStats.count),
+      ay: this.calculateMean(initialStats.ay, initialStats.count),
+      az: this.calculateMean(initialStats.az, initialStats.count),
+      gx: this.calculateMean(initialStats.gx, initialStats.count),
+      gy: this.calculateMean(initialStats.gy, initialStats.count),
+      gz: this.calculateMean(initialStats.gz, initialStats.count),
+    };
+
+    const sensorBlock = {
+      format: 'col',
+      columns: ['t', 'ax', 'ay', 'az', 'gx', 'gy', 'gz'],
+      units: {
+        t: 'ms',
+        ax: 'g',
+        ay: 'g',
+        az: 'g',
+        gx: 'rad/s',
+        gy: 'rad/s',
+        gz: 'rad/s',
+      },
+      samplingHz: 60,
+      resolution: 1000,
+      downsampled: true,
+      method: 'LTTB',
+      originalSampleCount: initialStats.count,
+      data: sensorDataFormatted,
+      stats: finalStats,
+    };
+
+    // 2. Format DERIVED block (Indicators from DB)
+    const patientAge = this.calculateAge(
+      evaluation.patient.birthday,
+      evaluation.date,
+    );
+
+    const derivedBlock = {
+      patientAgeOnEvaluation: patientAge,
+      indicators: evaluation.indicators
+        ? [
+            {
+              name: 'Repetitions',
+              value: evaluation.indicators.repetitionCount,
+              maxValue: 30,
+              classification: evaluation.indicators.classification,
+            },
+            {
+              name: 'Power',
+              value: evaluation.indicators.meanPower,
+              maxValue: 500,
+              classification: '',
+            },
+            {
+              name: 'Total Energy',
+              value: evaluation.indicators.totalEnergy,
+              maxValue: 10000,
+              classification: '',
+            },
+          ]
+        : [],
+      overallClassification: evaluation.indicators?.classification || 'N/A',
+    };
+
+    const cycleBlock = {
+      min: { total: 0, stand: 0, sit: 0 },
+      max: { total: 0, stand: 0, sit: 0 },
+    };
+
+    return {
+      sensor: sensorBlock,
+      derived: derivedBlock,
+      cycle: cycleBlock,
+    };
+  }
+
+  private updateStat(stat: SensorStat, value: number) {
+    if (value < stat.min) stat.min = value;
+    if (value > stat.max) stat.max = value;
+    stat.sum += value;
+  }
+
+  private calculateMean(stat: SensorStat, count: number) {
+    return {
+      min: stat.min === Infinity ? 0 : stat.min,
+      max: stat.max === -Infinity ? 0 : stat.max,
+      mean: count > 0 ? stat.sum / count : 0,
+    };
   }
 
   async findAll(filters: FilterEvaluationDto) {
@@ -367,6 +526,7 @@ export class EvaluationService extends BaseService<
       time_init: true,
       time_end: true,
       updatedAt: true,
+      indicators: true,
       healthcareUnit: {
         select: {
           id: true,
