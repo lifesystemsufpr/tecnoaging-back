@@ -145,6 +145,8 @@ model Evaluation {
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
   patient              Patient            @relation(fields: [patientId], references: [id])
   sensorData           SensorData[]
+  indicators           EvaluationIndicators?
+
 
   @@index([patientId])
   @@index([healthProfessionalId])
@@ -153,6 +155,23 @@ model Evaluation {
   @@index([type])
   @@index([time_end(sort: Desc)])
   @@map("evaluation")
+}
+
+model EvaluationIndicators {
+  id             String     @id @default(uuid())
+  
+  repetitionCount Int        @default(0)
+  meanPower       Float      @default(0.0)
+  totalEnergy     Float      @default(0.0)
+  classification  String     @default("")
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @default(now()) @updatedAt
+
+  evaluationId   String     @unique
+  evaluation     Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@map("evaluation_indicators")
 }
 
 model HealthcareUnit {

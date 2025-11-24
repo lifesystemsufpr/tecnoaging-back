@@ -42,7 +42,12 @@ interface PythonResponse {
     gyro_y: number;
     gyro_z: number;
   }[];
-  metricas: Record<string, any>;
+  metricas: {
+    num_repeticoes: number;
+    potencia_media: number;
+    energia_total: number;
+    classificacao: string;
+  };
 }
 
 type EvaluationQueryResult = Omit<
@@ -218,9 +223,20 @@ export class EvaluationService extends BaseService<
         gyro_z: p.gyro_z,
       }));
 
-      await this.prisma.sensorData.createMany({
-        data: dadosParaSalvar,
-      });
+      await this.prisma.$transaction([
+        this.prisma.sensorData.createMany({
+          data: dadosParaSalvar,
+        }),
+        this.prisma.evaluationIndicators.create({
+          data: {
+            evaluationId: evaluationId,
+            repetitionCount: result.metricas.num_repeticoes,
+            meanPower: result.metricas.potencia_media,
+            totalEnergy: result.metricas.energia_total,
+            classification: result.metricas.classificacao,
+          },
+        }),
+      ]);
 
       return result.metricas;
     } catch (error) {
