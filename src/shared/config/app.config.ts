@@ -1,8 +1,8 @@
 import { Logger } from '@nestjs/common';
 import { AppConfig, SecurityConfig } from './config.interface';
 
-const FIFTEEN_MINUTES_IN_SECONDS = 15 * 60; // 900
-const SEVEN_DAYS_IN_SECONDS = 7 * 24 * 60 * 60; // 604800
+const DEFAULT_EXP_TIME = 86400;
+const SEVEN_DAYS_IN_SECONDS = 604800; // 604800
 
 // eslint-disable-next-line sonarjs/function-return-type
 function getCorsOrigins(
@@ -26,7 +26,7 @@ export default () => {
 
     jwtExpirationTime: process.env.JWT_EXPIRES_IN
       ? +process.env.JWT_EXPIRES_IN
-      : FIFTEEN_MINUTES_IN_SECONDS,
+      : DEFAULT_EXP_TIME,
 
     jwtRefreshExpirationTime: process.env.JWT_REFRESH_EXPIRES_IN
       ? +process.env.JWT_REFRESH_EXPIRES_IN
