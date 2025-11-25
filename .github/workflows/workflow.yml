@@ -2,7 +2,7 @@ name: Deploy na VM
 
 on:
   push:
-    branches: [main, master]
+    branches: [dev_v2]
 
 jobs:
   deploy:
@@ -13,7 +13,7 @@ jobs:
         shell: bash
 
     env:
-      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
+      SSH_HOST: ${{ secrets.DEV_SSH_HOST || vars.DEV_SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
       APP_DIR:  tecnoaging-back
@@ -26,12 +26,12 @@ jobs:
       - name: SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
 
       - name: Validar secrets/variáveis
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          DATABASE_URL:    ${{ secrets.DEV_DATABASE_URL }}
           JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
           set -euo pipefail
@@ -67,12 +67,12 @@ jobs:
         run: |
           set -euo pipefail
     
-          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
+          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.DEV_POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
     
           {
           echo "DATABASE_URL=${DB_URL}"
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
-          echo "JWT_EXPIRES_IN=900"
+          echo "JWT_EXPIRES_IN=86400"
           echo "JWT_REFRESH_EXPIRES_IN=604800"
           echo "NODE_ENV=${{ secrets.NODE_ENV || 'production' }}"
           echo "NEST_PORT=3333"
@@ -120,14 +120,14 @@ jobs:
 
           command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
+          # REMOVER processo antigo completamente para garantir recarregamento de variáveis
+          pm2 delete "${PM2_APP}" || true
+
+          # INICIAR processo novo (lê .env atualizado)
           if [ -f ecosystem.config.js ]; then
-            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
+            pm2 start ecosystem.config.js --update-env
           else
-            if pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
-              pm2 restart "${PM2_APP}" --update-env
-            else
-              pm2 start dist/main.js --name "${PM2_APP}" --update-env
-            fi
+            pm2 start dist/main.js --name "${PM2_APP}" --update-env
           fi
 
           pm2 save || true
