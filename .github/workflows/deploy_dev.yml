@@ -1,8 +1,10 @@
-name: Deploy BACK DEV
+
+name: Deploy na VM
 
 on:
   push:
-    branches: [feat/pythonScriptIntegration]
+    branches: [dev_v2]
+
 
 jobs:
   deploy:
