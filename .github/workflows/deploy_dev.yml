@@ -2,7 +2,8 @@ name: Deploy BACK DEV
 
 on:
   push:
-    branches: [feat/pythonScriptIntegration]
+    branches: 
+      - deploy_dev_test
 
 jobs:
   deploy:
