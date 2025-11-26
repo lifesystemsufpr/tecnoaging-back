@@ -31,13 +31,21 @@ export class EvaluationController {
   }
 
   @Get()
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   findAll(@Query() filters: FilterEvaluationDto) {
     return this.evaluationService.findAll(filters);
   }
 
   @Get(':id')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   findOne(@Param('id') id: string) {
     return this.evaluationService.findOne(id);
+  }
+
+  @Get(':id/detailed')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
+  async findOneDetailed(@Param('id') id: string) {
+    return this.evaluationService.findOneDetailed(id);
   }
 
   @Delete(':id')

@@ -19,7 +19,7 @@ import { AuthController } from './auth.controller';
         const securityConfig = config.getOrThrow<SecurityConfig>('security');
         return {
           secret: securityConfig.jwtSecret,
-          signOptions: { expiresIn: securityConfig.jwtExpirationTime as any },
+          signOptions: { expiresIn: Number(securityConfig.jwtExpirationTime) },
         };
       },
       inject: [ConfigService],

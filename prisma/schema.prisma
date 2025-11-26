@@ -8,19 +8,22 @@ datasource db {
 }
 
 model User {
-  id                     String              @id @default(uuid())
-  cpf                    String              @unique
-  fullName               String
-  fullName_normalized    String              @db.Text @default("")
-  password               String
-  updatedAt              DateTime            @updatedAt
-  active                 Boolean             @default(true)
-  gender                 Gender
-  role                   SystemRole
-  phone                  String?
-  healthProfessional     HealthProfessional?
-  patient                Patient?
-  researcher             Researcher?
+  id                  String              @id @default(uuid())
+  cpf                 String              @unique
+  fullName            String
+  fullName_normalized String              @default("") @db.Text
+  password            String
+  active              Boolean             @default(true)
+  gender              Gender
+  role                SystemRole
+  phone               String?             
+  
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @default(now()) @updatedAt
+
+  healthProfessional  HealthProfessional?
+  patient             Patient?
+  researcher          Researcher?
 
   @@index([fullName_normalized])
   @@map("tecnoAging_user")
@@ -30,9 +33,12 @@ model Researcher {
   id            String      @id @unique
   email         String      @unique
   institutionId String
-  updatedAt     DateTime    @updatedAt
-  active        Boolean     @default(true)
   fieldOfStudy  String?
+  active        Boolean     @default(true)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
+
   user          User        @relation(fields: [id], references: [id])
   institution   Institution @relation(fields: [institutionId], references: [id])
 
@@ -41,14 +47,17 @@ model Researcher {
 }
 
 model HealthProfessional {
-  id                      String       @id @unique
-  email                   String       @unique
-  updatedAt               DateTime     @updatedAt
-  active                  Boolean      @default(true)
-  speciality              String
-  speciality_normalized   String       @db.Text @default("")
-  evaluation              Evaluation[]
-  user                    User         @relation(fields: [id], references: [id])
+  id                    String       @id @unique
+  email                 String       @unique
+  active                Boolean      @default(true)
+  speciality            String
+  speciality_normalized String       @default("") @db.Text
+  
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @default(now()) @updatedAt
+
+  evaluation            Evaluation[]
+  user                  User         @relation(fields: [id], references: [id])
 
   @@index([speciality])
   @@index([speciality_normalized])
@@ -57,11 +66,15 @@ model HealthProfessional {
 }
 
 model Institution {
-  id                String       @id @default(uuid())
-  title             String
-  title_normalized  String       @db.Text @default("")
-  active            Boolean      @default(true)
-  researchers       Researcher[]
+  id               String       @id @default(uuid())
+  title            String
+  title_normalized String       @default("") @db.Text
+  active           Boolean      @default(true)
+  
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @default(now()) @updatedAt
+
+  researchers      Researcher[]
 
   @@index([title_normalized])
   @@index([active])
@@ -71,8 +84,8 @@ model Institution {
 model Patient {
   id                   String              @id @unique
   birthday             DateTime            @db.Date
-  weight               Int
-  height               Int
+  weight               Int                 @default(0) 
+  height               Int                 @default(0) 
   zipCode              String
   street               String
   number               String
@@ -80,10 +93,13 @@ model Patient {
   city                 String
   state                String
   neighborhood         String
-  updatedAt            DateTime            @updatedAt
   active               Boolean             @default(true)
   socio_economic_level SocialEconomicLevel
   scholarship          Scholarship
+  
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @default(now()) @updatedAt
+
   evaluations          Evaluation[]
   user                 User                @relation(fields: [id], references: [id])
 
@@ -93,17 +109,22 @@ model Patient {
 model SensorData {
   id           String     @id @default(uuid())
   timestamp    DateTime
-  accel_x      Float
-  accel_y      Float
+  accel_x      Float      @default(0.0)
+  accel_y      Float      @default(0.0)
   accel_z      Float      @default(0.0)
-  gyro_x       Float
-  gyro_y       Float
-  gyro_z       Float
+  gyro_x       Float      @default(0.0)
+  gyro_y       Float      @default(0.0)
+  gyro_z       Float      @default(0.0)
+  filtered     Boolean    @default(false)
+  
+  createdAt    DateTime   @default(now()) 
+  
   evaluationId String
-  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
   @@index([evaluationId])
   @@index([timestamp])
+  @@index([evaluationId, filtered])
   @@map("sensor_data")
 }
 
@@ -112,37 +133,64 @@ model Evaluation {
   patientId            String
   healthProfessionalId String
   healthcareUnitId     String
-  date                 DateTime           @db.Date
-  updatedAt            DateTime           @updatedAt
+  date                 DateTime           @default(now()) @db.Date
   type                 TypeEvaluation
   time_end             DateTime           @db.Timestamp(6)
   time_init            DateTime           @db.Timestamp(6)
+  
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @default(now()) @updatedAt
+
   healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
   patient              Patient            @relation(fields: [patientId], references: [id])
   sensorData           SensorData[]
+  indicators           EvaluationIndicators?
+
 
   @@index([patientId])
   @@index([healthProfessionalId])
   @@index([healthcareUnitId])
   @@index([date])
   @@index([type])
+  @@index([time_end(sort: Desc)])
   @@map("evaluation")
 }
 
+model EvaluationIndicators {
+  id             String     @id @default(uuid())
+  
+  repetitionCount Int        @default(0)
+  meanPower       Float      @default(0.0)
+  totalEnergy     Float      @default(0.0)
+  classification  String     @default("")
+
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @default(now()) @updatedAt
+
+  evaluationId   String     @unique
+  evaluation     Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@map("evaluation_indicators")
+}
+
 model HealthcareUnit {
-  id                String       @id @default(uuid())
-  name              String
-  name_normalized   String       @db.Text @default("")
-  zipCode           String
-  street            String
-  number            String
-  complement        String?
-  city              String
-  state             String
-  neighborhood      String
-  active            Boolean      @default(true)
-  evaluations       Evaluation[]
+  id              String       @id @default(uuid())
+  name            String
+  name_normalized String       @default("") @db.Text
+  zipCode         String
+  street          String
+  number          String
+  complement      String?
+  city            String
+  state           String
+  neighborhood    String
+  active          Boolean      @default(true)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now()) @updatedAt
+
+  evaluations     Evaluation[]
 
   @@index([name_normalized])
   @@index([active])
@@ -185,5 +233,6 @@ enum SocialEconomicLevel {
 
 enum TypeEvaluation {
   FTSTS
-  TUG
+  TTSTS
+
 }

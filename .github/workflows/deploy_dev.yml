@@ -1,8 +1,10 @@
+
 name: Deploy na VM
 
 on:
   push:
     branches: [dev_v2]
+
 
 jobs:
   deploy:
