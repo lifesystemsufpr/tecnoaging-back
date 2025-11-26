@@ -1,4 +1,4 @@
-import { Logger, Module } from '@nestjs/common';
+import { Logger, Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import appConfig from './shared/config/app.config';
 import {
@@ -19,6 +19,7 @@ import { HealthUnitModule } from './modules/health-unit/health-unit.module';
 import { InstitutionModule } from './modules/institution/institution.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
 import { appPrismaServiceOptions } from './shared/config/prisma-service-options';
+import { InternalRequestMiddleware } from './shared/middleware/internal-request.middleware';
 
 @Module({
   imports: [
@@ -51,4 +52,9 @@ import { appPrismaServiceOptions } from './shared/config/prisma-service-options'
     UserService,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    // Apply internal request validation middleware to all routes
+    consumer.apply(InternalRequestMiddleware).forRoutes('*');
+  }
+}

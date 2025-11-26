@@ -78,9 +78,14 @@ async function bootstrap() {
     });
   }
 
-  await app.listen(nestConfig.port, '0.0.0.0');
+  // Bind to localhost only for security (only accessible from same machine)
+  // External access is handled by nginx reverse proxy
+  await app.listen(nestConfig.port, '127.0.0.1');
   logger.log(
     `[${nestConfig.environment}] Application is running on: ${await app.getUrl()}`,
+  );
+  logger.log(
+    `[Security] Backend is bound to 127.0.0.1 only. External access via nginx reverse proxy.`,
   );
 }
 
