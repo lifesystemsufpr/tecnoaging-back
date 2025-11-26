@@ -1,8 +1,8 @@
-name: Deploy na VM
+name: Deploy prod back
 
 on:
   push:
-    branches: [main, master]
+    paused
 
 jobs:
   deploy:
