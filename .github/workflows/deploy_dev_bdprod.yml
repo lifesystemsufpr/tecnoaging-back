@@ -1,10 +1,10 @@
 
-name: Deploy dev back with bd-dev
+name: Deploy dev back with bd-prod
 
 on:
   push:
     branches: 
-      - paused
+      - dev_v2
 
 jobs:
   deploy:
@@ -33,7 +33,7 @@ jobs:
       - name: Validar secrets/variáveis
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
-          DATABASE_URL:    ${{ secrets.DEV_DATABASE_URL }}
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
           set -euo pipefail
@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
     
-          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.DEV_POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
+          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
     
           {
           echo "DATABASE_URL=${DB_URL}"
