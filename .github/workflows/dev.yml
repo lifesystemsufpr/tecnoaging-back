@@ -70,9 +70,13 @@ jobs:
             mv ./deploy/package-lock.json ./ || true
             mv ./deploy/prisma ./ || true
             rm -rf ./deploy
-            
-            # Instala as dependências
+
+            # Configurar Node.js e instalar dependências
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm use default
             npm install
+            npm run prisma generate
 
             # Inicia a aplicação
             pm2 restart TecnoAging-api || pm2 start ecosystem.config.js
