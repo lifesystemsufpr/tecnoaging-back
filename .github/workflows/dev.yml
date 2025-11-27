@@ -1,0 +1,81 @@
+name: Deploy TecnoAging Backend - DEV
+
+on:
+  push:
+    branches:
+      - dev_ci
+
+jobs:
+  deploy:
+    name: Build and Deploy to DEV Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # ⚠️ Importante para Sentry conseguir ver o histórico de commits
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: Instalar dependências com npm
+        run: npm install
+
+      - name: Build da aplicação
+        run: npm run build
+
+      - name: Limpar diretório remoto
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            rm -rf /var/www/tecnoaging-back/*
+            mkdir -p /var/www/tecnoaging-back
+
+      - name: Preparar arquivos para deploy
+        run: |
+          mkdir deploy
+          echo "${{ secrets.ENV_DEV }}" > deploy/.env
+          cp -r dist package.json package-lock.json prisma deploy/
+
+      - name: Envia os arquivos para o servidor
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          port: 22
+          source: ./deploy/*
+          target: /var/www/tecnoaging-back
+
+      - name: Instala as dependências
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /var/www/tecnoaging-back
+            
+            # Move os arquivos da aplicação
+            mv ./deploy/dist ./ || true
+            mv ./deploy/package.json ./ || true
+            mv ./deploy/package-lock.json ./ || true
+            mv ./deploy/prisma ./ || true
+            rm -rf ./deploy
+            
+            # Instala as dependências
+            npm install
+
+            # Inicia a aplicação
+            pm2 restart TecnoAging-api || pm2 start ecosystem.config.js
+
+            # Salva os processos do pm2
+            pm2 save
