@@ -52,7 +52,7 @@ jobs:
           key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
           port: 22
           source: ./deploy/*
-          target: /var/www/tecnoaging-back
+          target: /home/azureuser/tecnoaging-backend
 
       - name: Instala as dependências
         uses: appleboy/ssh-action@v1.0.0
