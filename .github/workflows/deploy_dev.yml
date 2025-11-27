@@ -74,8 +74,8 @@ jobs:
           {
           echo "DATABASE_URL=${DB_URL}"
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
-          echo "JWT_EXPIRES_IN=86400"
-          echo "JWT_REFRESH_EXPIRES_IN=604800"
+          echo "JWT_EXPIRES_IN=900 #15 minutos por segurança "
+          echo "#JWT_REFRESH_EXPIRES_IN=604800 obsoleto devido a expiraçao dinamica no auth.service.ts(66-77)"
           echo "NODE_ENV=${{ secrets.NODE_ENV || 'production' }}"
           echo "NEST_PORT=3333"
           echo "HEALTH_HEAP_LIMIT_MB=200"

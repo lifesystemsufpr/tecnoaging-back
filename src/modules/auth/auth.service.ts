@@ -63,6 +63,8 @@ export class AuthService {
       persistent: keepMeLoggedIn,
     };
 
+    const refreshExpiresIn = keepMeLoggedIn ? '30d' : '1d';
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: securityConfig.jwtSecret,
@@ -70,7 +72,7 @@ export class AuthService {
       }),
       this.jwtService.signAsync(refreshPayload, {
         secret: securityConfig.jwtSecret,
-        expiresIn: securityConfig.jwtRefreshExpirationTime,
+        expiresIn: refreshExpiresIn,
       }),
     ]);
 
