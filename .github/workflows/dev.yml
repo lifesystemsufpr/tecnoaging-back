@@ -35,8 +35,8 @@ jobs:
           key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            rm -rf /var/www/tecnoaging-back/*
-            mkdir -p /var/www/tecnoaging-back
+            rm -rf ~/tecnoaging-backend/*
+            mkdir -p ~/tecnoaging-backend
 
       - name: Preparar arquivos para deploy
         run: |
@@ -62,7 +62,7 @@ jobs:
           key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cd /var/www/tecnoaging-back
+            cd ~/tecnoaging-backend
             
             # Move os arquivos da aplicação
             mv ./deploy/dist ./ || true
