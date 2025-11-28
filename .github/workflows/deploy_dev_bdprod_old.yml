@@ -4,7 +4,7 @@ name: Deploy dev back with bd-prod
 on:
   push:
     branches: 
-      - dev_v2
+      - python
 
 jobs:
   deploy:
@@ -80,6 +80,7 @@ jobs:
           echo "NEST_PORT=3333"
           echo "HEALTH_HEAP_LIMIT_MB=200"
           echo "HEALTH_RSS_LIMIT_MB=300"
+          echo "PYTHON_SERVICE_URL=http://localhost:8001"
           } > /tmp/.env
     
           scp -P "${SSH_PORT:-22}" /tmp/.env "${SSH_USER}@${SSH_HOST}:${APP_DIR}/.env"
@@ -109,6 +110,22 @@ jobs:
 
           cd ~/"${APP_DIR}"
 
+          # Configurar Python Service
+          if command -v python3 >/dev/null 2>&1; then
+            echo "Configurando Python..."
+            # Garante que o venv existe
+            if [ ! -d "python-service/venv" ]; then
+              echo "Criando venv em python-service/venv..."
+              python3 -m venv python-service/venv
+            fi
+            
+            # Instala dependências
+            echo "Instalando dependências Python..."
+            ./python-service/venv/bin/pip install -r python-service/requirements.txt
+          else
+            echo "AVISO: python3 não encontrado. O serviço python-service pode falhar."
+          fi
+
           if command -v npm >/dev/null 2>&1; then
             # Force install of dev dependencies (needed for nest build)
             # and clean install to avoid corruption
@@ -124,7 +141,8 @@ jobs:
 
           command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
-          # REMOVER processo antigo completamente para garantir recarregamento de variáveis
+          # REMOVER processos antigos completamente para garantir recarregamento de variáveis
+          pm2 delete TecnoAging-python || true
           pm2 delete "${PM2_APP}" || true
 
           # INICIAR processo novo (lê .env atualizado)
