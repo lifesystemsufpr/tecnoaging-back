@@ -4,7 +4,7 @@ name: Deploy dev back with bd-prod
 on:
   push:
     branches: 
-      - dev_v2
+      - obsolete ##!!!!!!!!!##
 
 jobs:
   deploy:

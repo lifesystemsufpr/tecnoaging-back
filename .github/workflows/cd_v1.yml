@@ -1,0 +1,152 @@
+name:  Build and Deploy to Backend Server
+
+on:
+  push:
+    branches:
+      - dev_v2
+
+jobs:
+  deploy:
+    name: Build and Deploy to Backend Server
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      SSH_HOST: ${{ secrets.DEV_SSH_HOST || vars.DEV_SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
+      APP_DIR:  tecnoaging-back
+      PM2_APP:  TecnoAging-api
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+
+      - name: Validar secrets/variáveis
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+          JWT_SECRET:      ${{ secrets.JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          
+          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
+            if [[ -z "${!v:-}" ]]; then
+              echo "::error title=Missing::$v está vazio."
+              exit 1
+            fi
+          done
+          if [[ -z "${SSH_PORT:-}" ]]; then
+            echo "SSH_PORT não definido, usando 22"
+          fi
+
+      - name: known_hosts
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Install Dependencies (Runner)
+        run: npm ci
+
+      - name: Build Application (Runner)
+        run: npm run build
+
+      - name: Create .env file
+        run: |
+          set -euo pipefail
+          
+          # Reconstructs the .env file variable by variable
+          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
+          
+          {
+            echo "DATABASE_URL=${DB_URL}"
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
+            echo "JWT_EXPIRES_IN=86400"
+            echo "JWT_REFRESH_EXPIRES_IN=604800"
+            echo "NODE_ENV=${{ secrets.NODE_ENV || 'production' }}"
+            echo "NEST_PORT=3333"
+            echo "HEALTH_HEAP_LIMIT_MB=200"
+            echo "HEALTH_RSS_LIMIT_MB=300"
+          } > .env
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir deploy_artifact
+          cp -r dist package.json package-lock.json prisma .env deploy_artifact/
+
+      - name: Transfer Files
+        run: |
+          set -euo pipefail
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          
+          # Use rsync to send artifacts to the server
+          # Using --delete to ensure the remote directory mirrors the artifacts (clean state)
+          rsync -avz --delete \
+            -e "ssh -p ${SSH_PORT:-22}" \
+            deploy_artifact/ \
+            "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
+
+      - name: Deploy on Server
+        run: |
+          set -euo pipefail
+          ssh -p "${SSH_PORT:-22}" \
+            -o StrictHostKeyChecking=no \
+            -o BatchMode=yes \
+            -o LogLevel=ERROR \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            "${SSH_USER}@${SSH_HOST}" \
+            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" <<'EOF'
+          set -euo pipefail
+
+          # Load Node/NVM
+          if [ -d "$HOME/.nvm" ]; then
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            command -v node >/dev/null 2>&1 || nvm use --lts || true
+          fi
+
+          cd ~/"${APP_DIR}"
+
+          # Install production dependencies
+          if command -v npm >/dev/null 2>&1; then
+            npm ci --production
+          else
+            echo "npm não encontrado"; exit 1
+          fi
+
+          # Run DB migrations
+          if [ -d "prisma" ]; then
+             npx prisma migrate deploy
+          fi
+
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+          # Clean restart with PM2
+          pm2 delete "${PM2_APP}" || true
+          
+          # Start application
+          # Since we only transferred dist/ and no ecosystem file, we point directly to main.js
+          # OR we check if ecosystem exists (it won't unless we transferred it)
+          # We transferred dist/, package.json, prisma, .env. 
+          # We default to starting dist/main.js as per instructions logic.
+          
+          pm2 start dist/main.js --name "${PM2_APP}" --update-env
+
+          pm2 save || true
+          exit 0
+          EOF
+
