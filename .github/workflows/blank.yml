@@ -3,7 +3,7 @@ name: Deploy na VM
 on:
   push:
     branches:
-      - master   # troque para main se for o seu padrão
+      - paused   # troque para main se for o seu padrão
 
 jobs:
   deploy:
