@@ -15,7 +15,7 @@ jobs:
         shell: bash
 
     env:
-      SSH_HOST: ${{ secrets.DEV_SSH_HOST || vars.DEV_SSH_HOST }}
+      SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
       APP_DIR:  tecnoaging-back
@@ -28,11 +28,11 @@ jobs:
       - name: SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Validar secrets/variáveis
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
