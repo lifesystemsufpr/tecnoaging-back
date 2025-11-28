@@ -3,7 +3,7 @@ name: Deploy TecnoAging Backend - DEV
 on:
   push:
     branches:
-      - dev_ci
+      - paused
 
 jobs:
   deploy:
