@@ -7,8 +7,8 @@ import { PrismaService } from 'nestjs-prisma';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { SystemRole, Prisma, User } from '@prisma/client';
 import { UpdateUserDto } from './dtos/update-user.dto';
-import { hashPassword } from 'src/shared/functions/hash-password';
-import { normalizeString } from 'src/shared/functions/normalize-string';
+import { hashPassword } from '../../shared/functions/hash-password';
+import { normalizeString } from '../../shared/functions/normalize-string';
 
 @Injectable()
 export class UserService {

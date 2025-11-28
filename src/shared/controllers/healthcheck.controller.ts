@@ -4,7 +4,7 @@ import {
   HealthCheckService,
   MemoryHealthIndicator,
 } from '@nestjs/terminus';
-import { Public } from 'src/modules/auth/decorators/public.decorator';
+import { Public } from '../../modules/auth/decorators/public.decorator';
 
 @Controller('status')
 @Public()

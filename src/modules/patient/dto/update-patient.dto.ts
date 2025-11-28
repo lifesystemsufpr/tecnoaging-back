@@ -1,5 +1,5 @@
 import { CreatePatientDto } from './create-patient.dto';
-import { UpdateUserDto } from 'src/modules/users/dtos/update-user.dto';
+import { UpdateUserDto } from '../../users/dtos/update-user.dto';
 import { Type } from 'class-transformer';
 import { IsOptional, ValidateNested } from 'class-validator';
 import { OmitType, PartialType } from '@nestjs/swagger';

@@ -9,9 +9,9 @@ import {
   Prisma,
   User,
 } from '@prisma/client';
-import { BaseService } from 'src/shared/services/base.service';
+import { BaseService } from '../../shared/services/base.service';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
-import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
+import { normalizeString as normalize } from '../../shared/functions/normalize-string';
 import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
 

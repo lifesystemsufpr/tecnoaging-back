@@ -3,9 +3,9 @@ import { JwtService } from '@nestjs/jwt';
 import { AccessToken, JwtPayload, Payload } from './interfaces/auth.interface';
 import { User } from '@prisma/client';
 import { PrismaService } from 'nestjs-prisma';
-import { comparePassword } from 'src/shared/functions/hash-password';
+import { comparePassword } from '../../shared/functions/hash-password';
 import { ConfigService } from '@nestjs/config';
-import { SecurityConfig } from 'src/shared/config/config.interface';
+import { SecurityConfig } from '../../shared/config/config.interface';
 
 @Injectable()
 export class AuthService {

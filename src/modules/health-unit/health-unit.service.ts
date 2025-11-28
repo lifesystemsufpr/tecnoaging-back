@@ -3,7 +3,7 @@ import { CreateHealthUnitDto } from './dto/create-health-unit.dto';
 import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
 import { PrismaService } from 'nestjs-prisma';
 import { Prisma } from '@prisma/client';
-import { normalizeString } from 'src/shared/functions/normalize-string';
+import { normalizeString } from '../../shared/functions/normalize-string';
 
 @Injectable()
 export class HealthUnitService {

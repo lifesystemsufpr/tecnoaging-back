@@ -2,7 +2,7 @@ import { OmitType, PartialType } from '@nestjs/swagger';
 import { CreateResearcherDto } from './create-researcher.dto';
 import { IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { UpdateUserDto } from 'src/modules/users/dtos/update-user.dto';
+import { UpdateUserDto } from '../../users/dtos/update-user.dto';
 
 class ResearcherDataOnlyDto extends OmitType(CreateResearcherDto, [
   'user',
