@@ -5,7 +5,7 @@ import { User } from '@prisma/client';
 import { PrismaService } from 'nestjs-prisma';
 import { comparePassword } from '../../shared/functions/hash-password';
 import { ConfigService } from '@nestjs/config';
-import { SecurityConfig } from '../../shared/config/config.interface';
+import { SecurityConfig } from 'src/shared/config/config.interface';
 
 @Injectable()
 export class AuthService {
