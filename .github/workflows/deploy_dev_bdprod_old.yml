@@ -113,6 +113,13 @@ jobs:
           # Configurar Python Service
           if command -v python3 >/dev/null 2>&1; then
             echo "Configurando Python..."
+            
+            # Verifica se o módulo venv está disponível
+            if ! python3 -c "import venv" &>/dev/null; then
+                echo "Módulo venv não encontrado. Tentando instalar..."
+                sudo apt-get update && sudo apt-get install -y python3-venv || echo "Falha ao instalar python3-venv via apt. Verifique as permissões ou instale manualmente."
+            fi
+
             # Garante que o venv existe
             if [ ! -d "python-service/venv" ]; then
               echo "Criando venv em python-service/venv..."
