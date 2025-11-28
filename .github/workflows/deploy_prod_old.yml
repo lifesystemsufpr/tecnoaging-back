@@ -4,7 +4,7 @@ name: Deploy prod back old yml
 on:
   push:
     branches: 
-      - python
+      - paused
 
 jobs:
   deploy:
