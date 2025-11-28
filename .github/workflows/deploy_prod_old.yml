@@ -4,7 +4,7 @@ name: Deploy dev back with bd-prod
 on:
   push:
     branches: 
-      - python
+      - PAUSED
 
 jobs:
   deploy:
@@ -111,26 +111,39 @@ jobs:
           cd ~/"${APP_DIR}"
 
           # Configurar Python Service
+          # Tenta instalar Python se não existir
+          if ! command -v python3 >/dev/null 2>&1; then
+            echo "Python 3 não encontrado. Instalando..."
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip python3-venv
+          fi
+
           if command -v python3 >/dev/null 2>&1; then
             echo "Configurando Python..."
             
-            # Verifica se o módulo venv está disponível
-            if ! python3 -c "import venv" &>/dev/null; then
-                echo "Módulo venv não encontrado. Tentando instalar..."
-                sudo apt-get update && sudo apt-get install -y python3-venv || echo "Falha ao instalar python3-venv via apt. Verifique as permissões ou instale manualmente."
-            fi
-
             # Garante que o venv existe
             if [ ! -d "python-service/venv" ]; then
               echo "Criando venv em python-service/venv..."
-              python3 -m venv python-service/venv
+              if ! python3 -m venv python-service/venv; then
+                  echo "Venv falhou. Tentando instalar pacote python3-venv..."
+                  rm -rf python-service/venv
+                  
+                  # Detecta versão (ex: 3.10)
+                  PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+                  sudo apt-get update
+                  sudo apt-get install -y "python${PY_VERSION}-venv" "python${PY_VERSION}-dev" || sudo apt-get install -y python3-venv python3-dev
+                  
+                  echo "Tentando criar venv novamente..."
+                  python3 -m venv python-service/venv
+              fi
             fi
             
             # Instala dependências
             echo "Instalando dependências Python..."
             ./python-service/venv/bin/pip install -r python-service/requirements.txt
           else
-            echo "AVISO: python3 não encontrado. O serviço python-service pode falhar."
+            echo "ERRO CRÍTICO: Não foi possível instalar ou encontrar o Python 3."
+            exit 1
           fi
 
           if command -v npm >/dev/null 2>&1; then
