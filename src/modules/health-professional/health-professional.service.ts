@@ -164,14 +164,14 @@ export class HealthProfessionalService extends BaseService<
   async remove(id: string) {
     await this.findOne(id);
     return this.prisma.$transaction(async (tx) => {
-      await tx.healthProfessional.update({
+      const healthProfessional = await tx.healthProfessional.update({
         where: { id },
         data: { active: false },
       });
 
       await this.userService.update(id, { active: false }, tx);
 
-      return this.findOne(id, tx);
+      return healthProfessional;
     });
   }
 }
