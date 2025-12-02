@@ -1,10 +1,10 @@
 
-name: Deploy dev back with bd-prod 
+name: old prod deploy 
 ##!!!!!!!!!##
 on:
   push:
     branches: 
-      - paused
+      - dev_v2
 
 jobs:
   deploy:
