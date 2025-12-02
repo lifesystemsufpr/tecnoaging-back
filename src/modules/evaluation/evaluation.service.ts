@@ -221,7 +221,7 @@ export class EvaluationService extends BaseService<
     try {
       const pythonUrl =
         (process.env['PYTHON_SERVICE_URL'] as string) ||
-        'http://localhost:8000';
+        'http://localhost:8001';
 
       const { data: result } = await lastValueFrom(
         this.httpService.post<PythonResponse>(
