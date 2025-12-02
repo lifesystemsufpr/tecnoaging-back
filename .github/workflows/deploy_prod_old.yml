@@ -1,10 +1,10 @@
 
-name: Deploy prod back old yml
+name: old prod deploy 
 ##!!!!!!!!!##
 on:
   push:
     branches: 
-      - paused
+      - obsolete
 
 jobs:
   deploy:

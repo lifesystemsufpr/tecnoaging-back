@@ -1,10 +1,10 @@
 
-name: Deploy dev back/bd-prod - old yml
+name: old dev deploy connected to prod BD
 ##!!!!!!!!!##
 on:
   push:
     branches: 
-      - paused
+      - dev_v2
 
 jobs:
   deploy:
