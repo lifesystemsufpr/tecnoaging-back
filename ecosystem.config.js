@@ -22,7 +22,7 @@ module.exports = {
   }, {
     name: 'TecnoAging-python',
     script: 'main.py',
-    interpreter: './venv/bin/python',
+    interpreter: './python-service/venv/bin/python',
     cwd: './python-service',
     instances: 1,
     exec_mode: 'fork',
