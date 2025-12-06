@@ -21,7 +21,7 @@ module.exports = {
     min_uptime: '10s'
   }, {
     name: 'TecnoAging-python',
-    script: './python-service/main.py',
+    script: 'main.py',
     interpreter: './venv/bin/python',
     cwd: './python-service',
     instances: 1,
