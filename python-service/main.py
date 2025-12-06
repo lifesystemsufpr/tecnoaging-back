@@ -44,3 +44,7 @@ def processar_sts(body: RequestBody):
     except Exception as e:
         print(f"Erro interno Python: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

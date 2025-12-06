@@ -21,8 +21,8 @@ module.exports = {
     min_uptime: '10s'
   }, {
     name: 'TecnoAging-python',
-    script: './venv/bin/python',
-    args: '-m uvicorn main:app --host 0.0.0.0 --port 8001',
+    script: './python-service/main.py',
+    interpreter: './venv/bin/python',
     cwd: './python-service',
     instances: 1,
     exec_mode: 'fork',
