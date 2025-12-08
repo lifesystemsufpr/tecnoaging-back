@@ -20,7 +20,7 @@ async function main() {
   console.log('🗑️ Limpando dados antigos...');
   await prisma.sensorData.deleteMany({});
   await prisma.evaluation.deleteMany({});
-  await prisma.patient.deleteMany({});
+  await prisma.participant.deleteMany({});
   await prisma.researcher.deleteMany({});
   await prisma.healthProfessional.deleteMany({});
   await prisma.user.deleteMany({});
@@ -154,15 +154,15 @@ async function main() {
     const sex = i % 2 === 0 ? 'male' : 'female';
     const name = faker.person.fullName({ sex });
 
-    const patientUser = await prisma.user.create({
+    const participantUser = await prisma.user.create({
       data: {
         cpf: faker.string.numeric(11),
         fullName: name,
         fullName_normalized: normalizeString(name) || name.toLowerCase(),
         gender: sex === 'male' ? Gender.MALE : Gender.FEMALE,
         password: passwordHash,
-        role: SystemRole.PATIENT,
-        patient: {
+        role: SystemRole.PARTICIPANT,
+        participant: {
           create: {
             birthday: faker.date.birthdate({ min: 60, max: 90, mode: 'age' }),
             weight: faker.number.int({ min: 50, max: 100 }),
@@ -178,11 +178,11 @@ async function main() {
           },
         },
       },
-      include: { patient: true },
+      include: { participant: true },
     });
 
-    if (!patientUser.patient) continue;
-    const patientId = patientUser.patient.id;
+    if (!participantUser.participant) continue;
+    const participantId = participantUser.participant.id;
 
     // Cria de 1 a 3 avaliações por paciente
     const numEvals = faker.number.int({ min: 1, max: 3 });
@@ -228,7 +228,7 @@ async function main() {
           date: date,
           time_init: timeInit,
           time_end: timeEnd,
-          patientId: patientId,
+          participantId: participantId,
           healthProfessionalId: randomHPId,
           healthcareUnitId: randomUnit.id,
           sensorData: {

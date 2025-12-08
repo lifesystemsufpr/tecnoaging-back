@@ -16,7 +16,7 @@ ADD COLUMN     "title_normalized" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "researcher" ALTER COLUMN "fieldOfStudy" DROP NOT NULL;
 
 -- AlterTable
-ALTER TABLE "tecnoAging_user" ADD COLUMN     "fullName_normalized" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "user" ADD COLUMN     "fullName_normalized" TEXT NOT NULL DEFAULT '';
 
 -- CreateIndex
 CREATE INDEX "health_professional_speciality_normalized_idx" ON "health_professional"("speciality_normalized");
@@ -34,4 +34,4 @@ CREATE INDEX "institution_title_normalized_idx" ON "institution"("title_normaliz
 CREATE INDEX "institution_active_idx" ON "institution"("active");
 
 -- CreateIndex
-CREATE INDEX "tecnoAging_user_fullName_normalized_idx" ON "tecnoAging_user"("fullName_normalized");
+CREATE INDEX "user_fullName_normalized_idx" ON "user"("fullName_normalized");

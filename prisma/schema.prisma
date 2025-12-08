@@ -22,11 +22,11 @@ model User {
   updatedAt           DateTime            @default(now()) @updatedAt
 
   healthProfessional  HealthProfessional?
-  patient             Patient?
+  participant             Participant?
   researcher          Researcher?
 
   @@index([fullName_normalized])
-  @@map("tecnoAging_user")
+  @@map("user")
 }
 
 model Researcher {
@@ -81,7 +81,7 @@ model Institution {
   @@map("institution")
 }
 
-model Patient {
+model Participant {
   id                   String              @id @unique
   birthday             DateTime            @db.Date
   weight               Int                 @default(0) 
@@ -103,7 +103,7 @@ model Patient {
   evaluations          Evaluation[]
   user                 User                @relation(fields: [id], references: [id])
 
-  @@map("patient")
+  @@map("participant")
 }
 
 model SensorData {
@@ -130,7 +130,7 @@ model SensorData {
 
 model Evaluation {
   id                   String             @id @default(uuid())
-  patientId            String
+  participantId            String
   healthProfessionalId String
   healthcareUnitId     String
   date                 DateTime           @default(now()) @db.Date
@@ -143,12 +143,12 @@ model Evaluation {
 
   healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
-  patient              Patient            @relation(fields: [patientId], references: [id])
+  participant              Participant            @relation(fields: [participantId], references: [id])
   sensorData           SensorData[]
   indicators           EvaluationIndicators?
 
 
-  @@index([patientId])
+  @@index([participantId])
   @@index([healthProfessionalId])
   @@index([healthcareUnitId])
   @@index([date])
@@ -199,7 +199,7 @@ model HealthcareUnit {
 
 enum SystemRole {
   MANAGER
-  PATIENT
+  PARTICIPANT
   RESEARCHER
   HEALTH_PROFESSIONAL
 }
