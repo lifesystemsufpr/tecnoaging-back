@@ -9,8 +9,8 @@ import { PrismaService } from 'nestjs-prisma';
 import { UserService } from '../users/user.service';
 import { Patient, Prisma, SystemRole, User } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { BaseService } from 'src/shared/services/base.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { BaseService } from '../../shared/services/base.service';
+import { QueryDto } from '../../shared/dto/query.dto';
 
 type PatientWithUser = Patient & { user: User };
 export type PatientResponse = Omit<PatientWithUser, 'user'> &

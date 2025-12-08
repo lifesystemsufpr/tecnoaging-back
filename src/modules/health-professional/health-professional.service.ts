@@ -8,9 +8,9 @@ import { UpdateHealthProfessionalDto } from './dto/update-health-professional.dt
 import { PrismaService } from 'nestjs-prisma';
 import { UserService } from '../users/user.service';
 import { HealthProfessional, Prisma, SystemRole, User } from '@prisma/client';
-import { BaseService } from 'src/shared/services/base.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
-import { normalizeString } from 'src/shared/functions/normalize-string';
+import { BaseService } from '../../shared/services/base.service';
+import { QueryDto } from '../../shared/dto/query.dto';
+import { normalizeString } from '../../shared/functions/normalize-string';
 
 type HealthProfessionalWithUser = HealthProfessional & { user: User };
 export type HealthProfessionalResponse = Omit<

@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsEnum, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { QueryDto } from '../../../shared/dto/query.dto';
 import { TypeEvaluation } from '@prisma/client';
 
 export class FilterEvaluationDto extends QueryDto {
