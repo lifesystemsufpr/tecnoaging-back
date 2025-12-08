@@ -4,7 +4,7 @@ name: old dev deploy connected to prod BD
 on:
   push:
     branches: 
-      - dev_v2
+      - paused
 
 jobs:
   deploy:
