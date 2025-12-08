@@ -31,7 +31,8 @@
     "prisma:generate": "npx prisma generate",
     "prisma:studio": "npx prisma studio",
     "prisma:seed": "npx prisma db seed",
-    "prisma:init": "npx prisma generate && npx prisma migrate dev && npx prisma db seed"
+    "prisma:init": "npx prisma generate && npx prisma migrate dev && npx prisma db seed",
+    "git:cls": "git checkout main && git pull && git fetch --prune && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -d"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
