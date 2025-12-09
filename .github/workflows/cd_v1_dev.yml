@@ -93,6 +93,10 @@ jobs:
       - name: Transfer Files
         run: |
           set -euo pipefail
+          
+          # Stop PM2 processes BEFORE transfer to release file locks
+          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "pm2 stop all || true" || true
+          
           ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
           
           # Use rsync to send artifacts to the server
