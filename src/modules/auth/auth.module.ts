@@ -5,7 +5,7 @@ import { LocalStrategy } from './strategy/local.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { SecurityConfig } from 'src/shared/config/config.interface';
+import { SecurityConfig } from '../../shared/config/config.interface';
 import { JwtStrategy } from './strategy/jwt.strategy';
 import { AuthController } from './auth.controller';
 

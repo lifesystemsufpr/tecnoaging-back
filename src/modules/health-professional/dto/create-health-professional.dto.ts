@@ -1,7 +1,7 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsNotEmpty, IsString, ValidateNested } from 'class-validator';
-import { CreateUserDto } from 'src/modules/users/dtos/create-user.dto';
+import { CreateUserDto } from '../../users/dtos/create-user.dto';
 
 export class CreateHealthProfessionalUserDto extends OmitType(CreateUserDto, [
   'role',

@@ -14,8 +14,8 @@ import {
   SystemRole,
   User,
 } from '@prisma/client';
-import { BaseService } from 'src/shared/services/base.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { BaseService } from '../../shared/services/base.service';
+import { QueryDto } from '../../shared/dto/query.dto';
 
 type ResearcherWithDetails = Researcher & {
   user: User;

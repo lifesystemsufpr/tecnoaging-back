@@ -1,5 +1,5 @@
 import { ValidateNested, IsString, IsUUID, IsNotEmpty } from 'class-validator';
-import { CreateUserDto } from 'src/modules/users/dtos/create-user.dto';
+import { CreateUserDto } from '../../users/dtos/create-user.dto';
 import { ApiProperty, OmitType } from '@nestjs/swagger';
 import { SystemRole } from '@prisma/client';
 import { Type } from 'class-transformer';

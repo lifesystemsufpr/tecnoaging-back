@@ -14,7 +14,7 @@ import { SystemRole } from '@prisma/client';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { CreateManagerDto } from './dto/create-manager.dto';
 import { UpdateManagerDto } from './dto/update-manager.dto';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { QueryDto } from '../../shared/dto/query.dto';
 
 @Controller('manager')
 @ApiBearerAuth()

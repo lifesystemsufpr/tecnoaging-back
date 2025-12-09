@@ -14,7 +14,7 @@ import { UpdateResearcherDto } from './dto/update-researcher.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { SystemRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { QueryDto } from '../../shared/dto/query.dto';
 
 @Controller('researcher')
 @ApiBearerAuth()
