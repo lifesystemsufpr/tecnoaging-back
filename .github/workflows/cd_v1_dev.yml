@@ -1,9 +1,9 @@
-name:  Build and Deploy to Backend Server
+name: DEV - Build and Deploy to Backend Server
 
 on:
   push:
     branches:
-      - paused
+      - dev_v2
 
 jobs:
   deploy:
@@ -20,6 +20,7 @@ jobs:
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
       APP_DIR:  tecnoaging-back
       PM2_APP:  TecnoAging-api
+      PM2_PY_APP: TecnoAging-python
 
     steps:
       - name: Checkout
@@ -81,13 +82,14 @@ jobs:
             echo "NEST_PORT=3333"
             echo "HEALTH_HEAP_LIMIT_MB=200"
             echo "HEALTH_RSS_LIMIT_MB=300"
+            echo "PYTHON_SERVICE_URL=http://localhost:8001"
           } > .env
 
       - name: Prepare Artifacts
         run: |
           mkdir deploy_artifact
-          cp -r dist package.json package-lock.json prisma .env deploy_artifact/
-
+          cp -r dist package.json package-lock.json prisma .env ecosystem.config.js python-service deploy_artifact/
+      
       - name: Transfer Files
         run: |
           set -euo pipefail
@@ -109,7 +111,7 @@ jobs:
             -o LogLevel=ERROR \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "${SSH_USER}@${SSH_HOST}" \
-            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' bash -se" <<'EOF'
+            "APP_DIR='${APP_DIR}' PM2_APP='${PM2_APP}' PM2_PY_APP='${PM2_PY_APP}' bash -se" <<'EOF'
           set -euo pipefail
 
           # Load Node/NVM
@@ -120,8 +122,44 @@ jobs:
           fi
 
           cd ~/"${APP_DIR}"
+          
+          # Configurar Python Service
+          # Tenta instalar Python se não existir
+          if ! command -v python3 >/dev/null 2>&1; then
+            echo "Python 3 não encontrado. Instalando..."
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip python3-venv
+          fi
 
-          # Install production dependencies
+          if command -v python3 >/dev/null 2>&1; then
+            echo "Configurando Python..."
+            
+            # Garante que o venv existe
+            if [ ! -d "python-service/venv" ]; then
+              echo "Criando venv em python-service/venv..."
+              if ! python3 -m venv python-service/venv; then
+                  echo "Venv falhou. Tentando instalar pacote python3-venv..."
+                  rm -rf python-service/venv
+                  
+                  # Detecta versão (ex: 3.10)
+                  PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+                  sudo apt-get update
+                  sudo apt-get install -y "python${PY_VERSION}-venv" "python${PY_VERSION}-dev" || sudo apt-get install -y python3-venv python3-dev
+                  
+                  echo "Tentando criar venv novamente..."
+                  python3 -m venv python-service/venv
+              fi
+            fi
+            
+            # Instala dependências
+            echo "Instalando dependências Python..."
+            ./python-service/venv/bin/pip install -r python-service/requirements.txt
+          else
+            echo "ERRO CRÍTICO: Não foi possível instalar ou encontrar o Python 3."
+            exit 1
+          fi
+
+          # Install production dependencies for Node
           if command -v npm >/dev/null 2>&1; then
             npm ci --production
           else
@@ -136,16 +174,19 @@ jobs:
           command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
           # Clean restart with PM2
+          # REMOVER processos antigos completamente para garantir recarregamento de variáveis
+          pm2 delete "${PM2_PY_APP}" || true
           pm2 delete "${PM2_APP}" || true
           
-          # Start application
-          # Since we only transferred dist/ and no ecosystem file, we point directly to main.js
-          # OR we check if ecosystem exists (it won't unless we transferred it)
-          # We transferred dist/, package.json, prisma, .env. 
-          # We default to starting dist/main.js as per instructions logic.
-          
-          pm2 start dist/main.js --name "${PM2_APP}" --update-env
+          # Start application using ecosystem.config.js
+          if [ -f ecosystem.config.js ]; then
+            pm2 start ecosystem.config.js --update-env
+          else
+            echo "ecosystem.config.js not found, falling back to simple start"
+            pm2 start dist/main.js --name "${PM2_APP}" --update-env
+          fi
 
           pm2 save || true
           exit 0
           EOF
+

@@ -1,9 +1,9 @@
-name: Build and Deploy to Backend Server (v2 with Python)
+name: PROD - Build and Deploy to Backend Server (v2 with Python)
 
 on:
   push:
     branches:
-      - dev_v2
+      - main
 
 jobs:
   deploy:
