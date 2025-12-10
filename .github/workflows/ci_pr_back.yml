@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - dev
+  push:
+    branches:
+      - speed
 
 jobs:
   build-and-test:

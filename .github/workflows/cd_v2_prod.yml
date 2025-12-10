@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           
           # Reconstructs the .env file variable by variable
-          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public"
+          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public&connection_limit=20&pool_timeout=20"
           
           {
             echo "DATABASE_URL=${DB_URL}"
@@ -95,14 +95,14 @@ jobs:
           set -euo pipefail
           
           # Stop PM2 processes BEFORE transfer to release file locks
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "pm2 stop all || true" || true
+          ssh -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" "pm2 stop all || true" || true
           
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          ssh -p "${SSH_PORT:-22}" -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
           
           # Use rsync to send artifacts to the server
           # Using --delete to ensure the remote directory mirrors the artifacts (clean state)
           rsync -avz --delete \
-            -e "ssh -p ${SSH_PORT:-22}" \
+            -e "ssh -p ${SSH_PORT:-22} -o StrictHostKeyChecking=no" \
             deploy_artifact/ \
             "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 

@@ -31,7 +31,7 @@ export const appPrismaServiceOptions = {
   middlewares: [
     loggingMiddleware({
       logger: new Logger('PrismaService'),
-      logLevel: 'log',
+      logLevel: process.env.NODE_ENV === 'production' ? 'warn' : 'log',
     }),
   ],
 };
