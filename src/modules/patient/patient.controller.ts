@@ -15,7 +15,7 @@ import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { Public } from '../auth/decorators/public.decorator';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { QueryDto } from '../../shared/dto/query.dto';
 @Controller('patient')
 @ApiBearerAuth()
 export class PatientController {

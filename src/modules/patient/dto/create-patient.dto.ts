@@ -10,7 +10,7 @@ import {
   MaxDate,
   ValidateNested,
 } from 'class-validator';
-import { CreateUserDto } from 'src/modules/users/dtos/create-user.dto';
+import { CreateUserDto } from '../../users/dtos/create-user.dto';
 
 export class CreatePatientUserDto extends OmitType(CreateUserDto, [
   'role',
