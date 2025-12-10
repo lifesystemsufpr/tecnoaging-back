@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
@@ -8,7 +8,8 @@ export class LocalAuthGuard extends AuthGuard('local') {
   handleRequest(err: any, user: any, info: any) {
     if (err || !user) {
       this.logger.error('Authentication failed:', err || info);
-      throw err || new Error('Authentication failed');
+      // Lança UnauthorizedException em vez de Error genérico para retornar 401
+      throw err || new UnauthorizedException('Credenciais inválidas');
     }
     console.log('Usuário validado e anexado ao request:', user);
     return user;

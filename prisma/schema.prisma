@@ -8,19 +8,19 @@ datasource db {
 }
 
 model User {
-  id                     String              @id @default(uuid())
-  cpf                    String              @unique
-  fullName               String
-  fullName_normalized    String              @db.Text @default("")
-  password               String
-  updatedAt              DateTime            @updatedAt
-  active                 Boolean             @default(true)
-  gender                 Gender
-  role                   SystemRole
-  phone                  String?
-  healthProfessional     HealthProfessional?
-  patient                Patient?
-  researcher             Researcher?
+  id                  String              @id @default(uuid())
+  cpf                 String              @unique
+  fullName            String
+  fullName_normalized String              @default("") @db.Text
+  password            String
+  updatedAt           DateTime            @updatedAt
+  active              Boolean             @default(true)
+  gender              Gender
+  role                SystemRole
+  phone               String?
+  healthProfessional  HealthProfessional?
+  patient             Patient?
+  researcher          Researcher?
 
   @@index([fullName_normalized])
   @@map("tecnoAging_user")
@@ -41,14 +41,15 @@ model Researcher {
 }
 
 model HealthProfessional {
-  id                      String       @id @unique
-  email                   String       @unique
-  updatedAt               DateTime     @updatedAt
-  active                  Boolean      @default(true)
-  speciality              String
-  speciality_normalized   String       @db.Text @default("")
-  evaluation              Evaluation[]
-  user                    User         @relation(fields: [id], references: [id])
+  id                    String            @id @unique
+  email                 String            @unique
+  updatedAt             DateTime          @updatedAt
+  active                Boolean           @default(true)
+  speciality            String
+  speciality_normalized String            @default("") @db.Text
+  evaluation            Evaluation[]
+  user                  User              @relation(fields: [id], references: [id])
+  avaliacoesIvcf20      AvaliacaoIvcf20[]
 
   @@index([speciality])
   @@index([speciality_normalized])
@@ -57,11 +58,11 @@ model HealthProfessional {
 }
 
 model Institution {
-  id                String       @id @default(uuid())
-  title             String
-  title_normalized  String       @db.Text @default("")
-  active            Boolean      @default(true)
-  researchers       Researcher[]
+  id               String       @id @default(uuid())
+  title            String
+  title_normalized String       @default("") @db.Text
+  active           Boolean      @default(true)
+  researchers      Researcher[]
 
   @@index([title_normalized])
   @@index([active])
@@ -86,6 +87,7 @@ model Patient {
   scholarship          Scholarship
   evaluations          Evaluation[]
   user                 User                @relation(fields: [id], references: [id])
+  avaliacoesIvcf20     AvaliacaoIvcf20[]
 
   @@map("patient")
 }
@@ -121,6 +123,7 @@ model Evaluation {
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
   patient              Patient            @relation(fields: [patientId], references: [id])
   sensorData           SensorData[]
+  avaliacaoIvcf20      AvaliacaoIvcf20?
 
   @@index([patientId])
   @@index([healthProfessionalId])
@@ -131,18 +134,18 @@ model Evaluation {
 }
 
 model HealthcareUnit {
-  id                String       @id @default(uuid())
-  name              String
-  name_normalized   String       @db.Text @default("")
-  zipCode           String
-  street            String
-  number            String
-  complement        String?
-  city              String
-  state             String
-  neighborhood      String
-  active            Boolean      @default(true)
-  evaluations       Evaluation[]
+  id              String       @id @default(uuid())
+  name            String
+  name_normalized String       @default("") @db.Text
+  zipCode         String
+  street          String
+  number          String
+  complement      String?
+  city            String
+  state           String
+  neighborhood    String
+  active          Boolean      @default(true)
+  evaluations     Evaluation[]
 
   @@index([name_normalized])
   @@index([active])
@@ -186,4 +189,92 @@ enum SocialEconomicLevel {
 enum TypeEvaluation {
   FTSTS
   TUG
+  IVCF20
+}
+
+model AvaliacaoIvcf20 {
+  id String @id @default(uuid())
+
+  // Relacionamento com a tabela Patient (Pessoa Idosa)
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  // Relacionamento com a tabela HealthProfessional (Profissional de Saúde que aplicou)
+  healthProfessionalId String
+  healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
+
+  // Relacionamento com a tabela Evaluation
+  evaluationId String     @unique
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
+
+  // Data da aplicação
+  date DateTime @default(now()) @db.Date
+
+  // Pontuação total
+  totalScore Int
+
+  // Classificação do Risco
+  riskClassification RiskClassification
+
+  // --- Seção 1: Idade e Auto-Percepção da Saúde ---
+  ageGroup             AgeGroup
+  selfPerceptionHealth SelfPerceptionHealth
+
+  // --- Seção 2: Atividades de Vida Diária (AVD) ---
+  avdInstrumentalShopping  Boolean
+  avdInstrumentalFinance   Boolean
+  avdInstrumentalHousework Boolean
+  avdBasicBathing          Boolean
+
+  // --- Seção 3: Cognição ---
+  cognitionFamilyAlert Boolean
+  cognitionWorsening   Boolean
+  cognitionImpediment  Boolean
+
+  // --- Seção 4: Humor ---
+  humorDespair        Boolean
+  humorLossOfInterest Boolean
+
+  // --- Seção 5: Mobilidade ---
+  mobilityFineMotor         Boolean
+  mobilityWalkingDifficulty Boolean
+  mobilityFalls             Boolean
+
+  // --- Seção 6: Comunicação ---
+  communicationHearing  Boolean
+  communicationSpeaking Boolean
+
+  // --- Seção 7: Comorbidades ---
+  comorbiditiesFiveOrMore     Boolean
+  comorbiditiesFiveOrMoreMeds Boolean
+
+  // --- Seção 8: Sinais de Alerta ---
+  alertSignsIncontinence         Boolean
+  alertSignsWeightLoss           Boolean
+  alertSignsLowBMI               Boolean
+  alertSignsLowCalfCircumference Boolean
+  alertSignsSlowGaitSpeed        Boolean
+
+  // Campos de metadados
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ivcf20_evaluation")
+}
+
+enum RiskClassification {
+  LOW_RISK
+  MODERATE_RISK
+  HIGH_RISK
+}
+
+enum AgeGroup {
+  AGE_60_74
+  AGE_75_84
+  AGE_85_PLUS
+}
+
+enum SelfPerceptionHealth {
+  EXCELLENT_VERYGOOD_GOOD
+  REGULAR_OR_BAD
 }

@@ -65,6 +65,11 @@ export class CreateHealthUnitDto {
   @IsString()
   state: string;
 
+  @ApiProperty({
+    description: 'Whether the health unit is active',
+    example: true,
+    type: Boolean,
+  })
   @IsNotEmpty()
   @IsBoolean()
   active: boolean;
