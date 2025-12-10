@@ -58,8 +58,31 @@ jobs:
         run: |
           set -e
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
-
+          chmod 600 ~/.ssh/known_hosts
+          
+          - name: Test SSH Connection
+          run: |
+            set -euo pipefail
+            echo "Testing SSH connection..."
+            echo "SSH_AUTH_SOCK: ${SSH_AUTH_SOCK:-not set}"
+            if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+              ssh-add -l || echo "Warning: No keys found in agent"
+            else
+              echo "::error::SSH_AUTH_SOCK is not set - SSH agent may not be configured"
+              exit 1
+            fi
+            ssh -p "${SSH_PORT:-22}" \
+              -o StrictHostKeyChecking=no \
+              -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              "${SSH_USER}@${SSH_HOST}" \
+              "echo 'SSH connection successful'" || {
+              echo "::error::SSH connection test failed"
+              exit 1
+            }
+  
       - name: Install Dependencies (Runner)
         run: npm ci
 
@@ -76,7 +99,6 @@ jobs:
           # connect_timeout: timeout para estabelecer nova conexão (segundos)
           # statement_timeout: timeout para queries individuais (milissegundos)
           DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public&connection_limit=20&pool_timeout=20&connect_timeout=10&statement_timeout=30000"
-          
           {
             echo "DATABASE_URL=${DB_URL}"
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"

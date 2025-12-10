@@ -61,7 +61,7 @@ jobs:
           chmod 700 ~/.ssh
           ssh-keyscan -p "${SSH_PORT:-22}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
           chmod 600 ~/.ssh/known_hosts
-
+          
       - name: Test SSH Connection
         run: |
           set -euo pipefail
@@ -94,8 +94,11 @@ jobs:
           set -euo pipefail
           
           # Reconstructs the .env file variable by variable
-          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.DEV_POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public&connection_limit=20&pool_timeout=20"
-          
+          # connection_limit: máximo de conexões no pool (evita sobrecarga no DB)
+          # pool_timeout: tempo máximo para obter conexão do pool (segundos)
+          # connect_timeout: timeout para estabelecer nova conexão (segundos)
+          # statement_timeout: timeout para queries individuais (milissegundos)
+          DB_URL="postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT }}/${{ secrets.POSTGRES_DB }}?schema=public&connection_limit=20&pool_timeout=20&connect_timeout=10&statement_timeout=30000"          
           {
             echo "DATABASE_URL=${DB_URL}"
             echo "JWT_SECRET=${{ secrets.JWT_SECRET }}"
@@ -195,3 +198,25 @@ jobs:
 
           # Run DB migrations
           if [ -d "prisma" ]; then
+             npx prisma migrate deploy
+          fi
+
+          command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+          # Clean restart with PM2
+          # REMOVER processos antigos completamente para garantir recarregamento de variáveis
+          pm2 delete "${PM2_PY_APP}" || true
+          pm2 delete "${PM2_APP}" || true
+          
+          # Start application using ecosystem.config.js
+          if [ -f ecosystem.config.js ]; then
+            pm2 start ecosystem.config.js --update-env
+          else
+            echo "ecosystem.config.js not found, falling back to simple start"
+            pm2 start dist/main.js --name "${PM2_APP}" --update-env
+          fi
+
+          pm2 save || true
+          exit 0
+          EOF
+
