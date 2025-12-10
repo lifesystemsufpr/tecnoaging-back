@@ -8,49 +8,52 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { PatientService } from './patient.service';
-import { CreatePatientDto } from './dto/create-patient.dto';
-import { UpdatePatientDto } from './dto/update-patient.dto';
+import { ParticipantService } from './participant.service';
+import { CreateParticipantDto } from './dto/create-participant.dto';
+import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { Public } from '../auth/decorators/public.decorator';
 import { QueryDto } from 'src/shared/dto/query.dto';
-@Controller('patient')
+@Controller('participant')
 @ApiBearerAuth()
-export class PatientController {
-  constructor(private readonly patientService: PatientService) {}
+export class ParticipantController {
+  constructor(private readonly participantService: ParticipantService) {}
 
   //Ver se vai ficar publico mesmo
   @Public()
   @Post()
-  create(@Body() createPatientDto: CreatePatientDto) {
-    return this.patientService.create(createPatientDto);
+  create(@Body() createParticipantDto: CreateParticipantDto) {
+    return this.participantService.create(createParticipantDto);
   }
 
   @Roles([SystemRole.HEALTH_PROFESSIONAL])
   @Get()
   findAll(@Query() queryDto: QueryDto) {
-    return this.patientService.findAll(queryDto);
+    return this.participantService.findAll(queryDto);
   }
 
-  @Roles([SystemRole.PATIENT, SystemRole.HEALTH_PROFESSIONAL])
+  @Roles([SystemRole.PARTICIPANT, SystemRole.HEALTH_PROFESSIONAL])
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.patientService.findOne(id);
+    return this.participantService.findOne(id);
   }
 
   @Roles([SystemRole.HEALTH_PROFESSIONAL])
   @Patch(':id')
   @ApiNoContentResponse()
-  update(@Param('id') id: string, @Body() updatePatientDto: UpdatePatientDto) {
-    return this.patientService.update(id, updatePatientDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateParticipantDto: UpdateParticipantDto,
+  ) {
+    return this.participantService.update(id, updateParticipantDto);
   }
 
   @Roles([SystemRole.HEALTH_PROFESSIONAL])
   @Delete(':id')
   @ApiNoContentResponse()
   remove(@Param('id') id: string) {
-    return this.patientService.remove(id);
+    return this.participantService.remove(id);
   }
 }

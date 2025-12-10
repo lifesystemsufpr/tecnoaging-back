@@ -2,7 +2,7 @@
 ALTER TABLE "sensor_data" ADD COLUMN     "accel_z" DOUBLE PRECISION NOT NULL DEFAULT 0.0;
 
 -- CreateIndex
-CREATE INDEX "evaluation_patientId_idx" ON "evaluation"("patientId");
+CREATE INDEX "evaluation_participantId_idx" ON "evaluation"("participantId");
 
 -- CreateIndex
 CREATE INDEX "evaluation_healthProfessionalId_idx" ON "evaluation"("healthProfessionalId");

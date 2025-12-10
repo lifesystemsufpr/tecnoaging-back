@@ -3,45 +3,49 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreatePatientDto } from './dto/create-patient.dto';
-import { UpdatePatientDto } from './dto/update-patient.dto';
+import { CreateParticipantDto } from './dto/create-participant.dto';
+import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { PrismaService } from 'nestjs-prisma';
 import { UserService } from '../users/user.service';
-import { Patient, Prisma, SystemRole, User } from '@prisma/client';
+import { Participant, Prisma, SystemRole, User } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BaseService } from 'src/shared/services/base.service';
 import { QueryDto } from 'src/shared/dto/query.dto';
 
-type PatientWithUser = Patient & { user: User };
-export type PatientResponse = Omit<PatientWithUser, 'user'> &
+type ParticipantWithUser = Participant & { user: User };
+export type ParticipantResponse = Omit<ParticipantWithUser, 'user'> &
   Omit<User, 'password'>;
 
 @Injectable()
-export class PatientService extends BaseService<
-  Prisma.PatientDelegate,
-  PatientResponse
+export class ParticipantService extends BaseService<
+  Prisma.ParticipantDelegate,
+  ParticipantResponse
 > {
   constructor(
     protected readonly prisma: PrismaService,
     private readonly userService: UserService,
   ) {
-    super(prisma, prisma.patient, ['user.fullName', 'user.cpf'], {
+    super(prisma, prisma.participant, ['user.fullName', 'user.cpf'], {
       user: true,
     });
   }
 
-  protected transform(patient: PatientWithUser): PatientResponse {
-    const { password: _password, ...userData } = patient.user;
-    const { user: _user, ...patientData } = patient;
+  protected transform(participant: ParticipantWithUser): ParticipantResponse {
+    const { password: _password, ...userData } = participant.user;
+    const { user: _user, ...participantData } = participant;
     return {
-      ...patientData,
+      ...participantData,
       ...userData,
     };
   }
 
-  async create(createPatientDto: CreatePatientDto) {
+  async create(createParticipantDto: CreateParticipantDto) {
     return await this.prisma.$transaction(async (tx) => {
-      const { user: userData, birthday, ...patientData } = createPatientDto;
+      const {
+        user: userData,
+        birthday,
+        ...participantData
+      } = createParticipantDto;
       const timeZone = 'America/Sao_Paulo';
       const dateString = new Date(birthday).toISOString().split('T')[0];
       const correctDate = fromZonedTime(dateString, timeZone);
@@ -50,14 +54,14 @@ export class PatientService extends BaseService<
         {
           ...userData,
           password: password,
-          role: SystemRole.PATIENT,
+          role: SystemRole.PARTICIPANT,
         },
         tx,
       );
 
-      const patient = await tx.patient.create({
+      const participant = await tx.participant.create({
         data: {
-          ...patientData,
+          ...participantData,
           birthday,
           user: {
             connect: {
@@ -67,7 +71,7 @@ export class PatientService extends BaseService<
         },
       });
 
-      return { ...user, ...patient };
+      return { ...user, ...participant };
     });
   }
 
@@ -84,32 +88,34 @@ export class PatientService extends BaseService<
   async findOne(
     id: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<PatientResponse> {
+  ): Promise<ParticipantResponse> {
     const prismaClient = tx || this.prisma;
-    const patientWithUser = await prismaClient.patient.findFirstOrThrow({
-      where: {
-        id,
-        active: true,
-        user: { active: true },
+    const participantWithUser = await prismaClient.participant.findFirstOrThrow(
+      {
+        where: {
+          id,
+          active: true,
+          user: { active: true },
+        },
+        include: { user: true },
       },
-      include: { user: true },
-    });
+    );
 
-    return this.transform(patientWithUser);
+    return this.transform(participantWithUser);
   }
 
-  async update(id: string, updatePatientDto: UpdatePatientDto) {
+  async update(id: string, updateParticipantDto: UpdateParticipantDto) {
     try {
       await this.findOne(id);
       let hasEffectiveChanges = false;
       const timeZone = 'America/Sao_Paulo';
 
       return await this.prisma.$transaction(async (tx) => {
-        const { user: userData, ...patientData } = updatePatientDto;
+        const { user: userData, ...participantData } = updateParticipantDto;
         let newPassword: string | undefined = undefined;
 
-        if (patientData && patientData.birthday) {
-          const dateString = new Date(patientData.birthday)
+        if (participantData && participantData.birthday) {
+          const dateString = new Date(participantData.birthday)
             .toISOString()
             .split('T')[0];
           const correctDate = fromZonedTime(dateString, timeZone);
@@ -132,10 +138,10 @@ export class PatientService extends BaseService<
           hasEffectiveChanges = true;
         }
 
-        if (patientData && Object.keys(patientData).length > 0) {
-          await tx.patient.update({
+        if (participantData && Object.keys(participantData).length > 0) {
+          await tx.participant.update({
             where: { id },
-            data: patientData,
+            data: participantData,
           });
           hasEffectiveChanges = true;
         }
@@ -171,14 +177,14 @@ export class PatientService extends BaseService<
     await this.findOne(id);
 
     return this.prisma.$transaction(async (tx) => {
-      const patient = await tx.patient.update({
+      const participant = await tx.participant.update({
         where: { id },
         data: { active: false },
       });
 
       await this.userService.update(id, { active: false }, tx);
 
-      return patient;
+      return participant;
     });
   }
 }

@@ -51,7 +51,7 @@ export class CreateEvaluationDto {
   @IsUUID()
   @IsString()
   @IsNotEmpty()
-  patientId: string;
+  participantId: string;
 
   @ApiProperty({ example: '1633396f-e11f-4017-9caf-fef3538c15ac' })
   @IsUUID()

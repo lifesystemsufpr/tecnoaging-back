@@ -5,7 +5,7 @@ import {
   Evaluation,
   HealthcareUnit,
   HealthProfessional,
-  Patient,
+  Participant,
   Prisma,
   User,
 } from '@prisma/client';
@@ -16,19 +16,19 @@ import { HttpService } from '@nestjs/axios';
 import { lastValueFrom } from 'rxjs';
 
 type EvaluationWithDetails = Evaluation & {
-  patient: Patient & { user: User };
+  participant: Participant & { user: User };
   healthProfessional: HealthProfessional & { user: User };
   healthcareUnit: HealthcareUnit;
 };
 
-type FormattedPatient = Omit<Patient, 'user'> & Omit<User, 'password'>;
+type FormattedParticipant = Omit<Participant, 'user'> & Omit<User, 'password'>;
 type FormattedHP = Omit<HealthProfessional, 'user'> & Omit<User, 'password'>;
 
 export type EvaluationResponse = Omit<
   Evaluation,
-  'patient' | 'healthProfessional'
+  'participant' | 'healthProfessional'
 > & {
-  patient: FormattedPatient;
+  participant: FormattedParticipant;
   healthProfessional: FormattedHP;
 };
 
@@ -53,10 +53,10 @@ interface PythonResponse {
 
 type EvaluationQueryResult = Omit<
   Evaluation,
-  'patientId' | 'healthProfessionalId' | 'healthcareUnitId'
+  'participantId' | 'healthProfessionalId' | 'healthcareUnitId'
 > & {
   healthcareUnit: { id: string; name: string };
-  patient: Pick<Patient, 'id' | 'birthday' | 'weight' | 'height'> & {
+  participant: Pick<Participant, 'id' | 'birthday' | 'weight' | 'height'> & {
     user: Pick<User, 'fullName' | 'cpf' | 'gender'>;
   };
   healthProfessional: Pick<
@@ -98,12 +98,12 @@ export class EvaluationService extends BaseService<
       prisma,
       prisma.evaluation,
       [
-        'patient.user.fullName_normalized',
-        'patient.user.cpf',
+        'participant.user.fullName_normalized',
+        'participant.user.cpf',
         'healthProfessional.user.fullName_normalized',
       ],
       {
-        patient: { include: { user: true } },
+        participant: { include: { user: true } },
         healthProfessional: { include: { user: true } },
         healthcareUnit: true,
       },
@@ -111,15 +111,16 @@ export class EvaluationService extends BaseService<
   }
 
   protected transform(evaluation: EvaluationWithDetails): EvaluationResponse {
-    const { patient, healthProfessional, ...restOfEvaluation } = evaluation;
+    const { participant, healthProfessional, ...restOfEvaluation } = evaluation;
 
-    const pUserData = { ...patient.user };
+    const pUserData = { ...participant.user };
     delete (pUserData as Partial<User>).password;
 
-    const patientData = { ...patient };
-    delete (patientData as Partial<EvaluationWithDetails['patient']>).user;
+    const participantData = { ...participant };
+    delete (participantData as Partial<EvaluationWithDetails['participant']>)
+      .user;
 
-    const formattedPatient = { ...patientData, ...pUserData };
+    const formattedParticipant = { ...participantData, ...pUserData };
 
     const hpUserData = { ...healthProfessional.user };
     delete (hpUserData as Partial<User>).password;
@@ -132,7 +133,7 @@ export class EvaluationService extends BaseService<
 
     return {
       ...restOfEvaluation,
-      patient: formattedPatient,
+      participant: formattedParticipant,
       healthProfessional: formattedHealthProfessional,
     };
   }
@@ -150,7 +151,7 @@ export class EvaluationService extends BaseService<
         },
       },
       include: {
-        patient: {
+        participant: {
           include: {
             user: true,
           },
@@ -158,12 +159,12 @@ export class EvaluationService extends BaseService<
       },
     });
 
-    const age = this.calculateAge(evaluation.patient.birthday, new Date());
+    const age = this.calculateAge(evaluation.participant.birthday, new Date());
 
     const userProfile = {
-      weight: evaluation.patient.weight,
-      height: evaluation.patient.height,
-      sex: evaluation.patient.user.gender,
+      weight: evaluation.participant.weight,
+      height: evaluation.participant.height,
+      sex: evaluation.participant.user.gender,
       age: age,
     };
 
@@ -286,7 +287,7 @@ export class EvaluationService extends BaseService<
           orderBy: { timestamp: 'asc' },
         },
         indicators: true,
-        patient: {
+        participant: {
           select: { birthday: true },
         },
       },
@@ -358,13 +359,13 @@ export class EvaluationService extends BaseService<
     };
 
     // 2. Format DERIVED block (Indicators from DB)
-    const patientAge = this.calculateAge(
-      evaluation.patient.birthday,
+    const participantAge = this.calculateAge(
+      evaluation.participant.birthday,
       evaluation.date,
     );
 
     const derivedBlock = {
-      patientAgeOnEvaluation: patientAge,
+      participantAgeOnEvaluation: participantAge,
       indicators: evaluation.indicators
         ? [
             {
@@ -421,8 +422,8 @@ export class EvaluationService extends BaseService<
       page = 1,
       pageSize = 10,
       search,
-      patientCpf,
-      patientName,
+      participantCpf,
+      participantName,
       healthProfessionalCpf,
       healthProfessionalName,
       type,
@@ -435,24 +436,24 @@ export class EvaluationService extends BaseService<
 
     const conditions: Prisma.EvaluationWhereInput[] = [];
 
-    if (patientCpf) {
+    if (participantCpf) {
       conditions.push({
-        patient: {
+        participant: {
           user: {
             cpf: {
-              contains: patientCpf,
+              contains: participantCpf,
               mode: 'insensitive',
             },
           },
         },
       });
     }
-    if (patientName) {
+    if (participantName) {
       conditions.push({
-        patient: {
+        participant: {
           user: {
             fullName: {
-              contains: patientName,
+              contains: participantName,
               mode: 'insensitive',
             },
           },
@@ -533,7 +534,7 @@ export class EvaluationService extends BaseService<
           name: true,
         },
       },
-      patient: {
+      participant: {
         select: {
           id: true,
           birthday: true,
@@ -576,15 +577,15 @@ export class EvaluationService extends BaseService<
 
     const data = (evaluations as unknown as EvaluationQueryResult[]).map(
       (e) => {
-        const { user: pUser, ...pInfo } = e.patient;
-        const formattedPatient = { ...pInfo, ...pUser };
+        const { user: pUser, ...pInfo } = e.participant;
+        const formattedParticipant = { ...pInfo, ...pUser };
 
         const { user: hpUser, ...hpInfo } = e.healthProfessional;
         const formattedHP = { ...hpInfo, ...hpUser };
 
         return {
           ...e,
-          patient: formattedPatient,
+          participant: formattedParticipant,
           healthProfessional: formattedHP,
         };
       },

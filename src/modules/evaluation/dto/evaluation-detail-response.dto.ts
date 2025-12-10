@@ -38,7 +38,7 @@ export class Indicator {
 }
 
 export class DerivedBlock {
-  patientAgeOnEvaluation: number;
+  participantAgeOnEvaluation: number;
   indicators: Indicator[];
   overallClassification: string;
 }
