@@ -3,7 +3,7 @@ name: Build and Deploy to Backend Server (v2 with Python)
 on:
   push:
     branches:
-      - main
+      - relativePaths
 
 jobs:
   deploy:
@@ -18,7 +18,7 @@ jobs:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
-      APP_DIR:  tecnoaging-back
+      APP_DIR:  TecnoAging_back
       PM2_APP:  TecnoAging-api
       PM2_PY_APP: TecnoAging-python
 

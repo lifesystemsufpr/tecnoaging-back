@@ -3,7 +3,7 @@ name: DEV - Build and Deploy to Backend Server
 on:
   push:
     branches:
-      - dev_v2
+      - obsolete
 
 jobs:
   deploy:
