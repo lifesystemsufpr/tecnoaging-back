@@ -5,10 +5,10 @@ import {
   Scholarship,
   SocialEconomicLevel,
   TypeEvaluation,
-  QuestionType, // <--- Importante: Adicionado enum QuestionType
+  QuestionType,
 } from '@prisma/client';
-import { hashPassword } from '../src/shared/functions/hash-password';
-import { normalizeString } from '../src/shared/functions/normalize-string';
+import { hashPassword } from '../src/shared/functions/hash-password'; // Ajuste o caminho conforme seu projeto
+import { normalizeString } from '../src/shared/functions/normalize-string'; // Ajuste o caminho conforme seu projeto
 import { fakerPT_BR as faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
@@ -21,7 +21,6 @@ async function main() {
   // ==================================================
   console.log('🗑️ Limpando dados antigos...');
 
-  // Limpa respostas e questionários
   await prisma.answer.deleteMany({});
   await prisma.questionnaireResponse.deleteMany({});
   await prisma.questionOption.deleteMany({});
@@ -30,10 +29,9 @@ async function main() {
   await prisma.questionGroup.deleteMany({});
   await prisma.questionnaire.deleteMany({});
 
-  // Limpa dados clínicos e usuários
   await prisma.sensorData.deleteMany({});
   await prisma.evaluation.deleteMany({});
-  await prisma.evaluationIndicators.deleteMany({}); // Caso exista
+  await prisma.evaluationIndicators.deleteMany({});
   await prisma.participant.deleteMany({});
   await prisma.researcher.deleteMany({});
   await prisma.healthProfessional.deleteMany({});
@@ -42,11 +40,11 @@ async function main() {
   await prisma.healthcareUnit.deleteMany({});
 
   // ==================================================
-  // 2. QUESTIONÁRIO IVCF-20 (COMPLETO BASEADO NO PDF)
+  // 2. QUESTIONÁRIO IVCF-20 (Criação da Estrutura)
   // ==================================================
-  console.log('📝 Criando Questionário IVCF-20 Completo...');
+  console.log('📝 Criando Questionário IVCF-20 Estrutural...');
 
-  const ivcf = await prisma.questionnaire.create({
+  const createdIvcf = await prisma.questionnaire.create({
     data: {
       title: 'IVCF-20',
       slug: 'ivcf-20',
@@ -56,9 +54,7 @@ async function main() {
       active: true,
       groups: {
         create: [
-          // ===================================
           // GRUPO 1: IDADE
-          // ===================================
           {
             title: 'Idade',
             order: 1,
@@ -77,10 +73,7 @@ async function main() {
               },
             },
           },
-
-          // ===================================
-          // GRUPO 2: AUTOPERCEPÇÃO DA SAÚDE
-          // ===================================
+          // GRUPO 2: AUTOPERCEPÇÃO
           {
             title: 'Autopercepção da Saúde',
             order: 2,
@@ -92,25 +85,17 @@ async function main() {
                 type: QuestionType.MULTIPLE_CHOICE,
                 options: {
                   create: [
-                    {
-                      label: 'Excelente, muito boa ou boa',
-                      score: 0,
-                      order: 1,
-                    },
+                    { label: 'Excelente, muito boa ou boa', score: 0, order: 1 },
                     { label: 'Regular ou ruim', score: 1, order: 2 },
                   ],
                 },
               },
             },
           },
-
-          // ===================================
-          // GRUPO 3: AVD INSTRUMENTAL (AVD-I)
-          // ===================================
+          // GRUPO 3: AVD INSTRUMENTAL
           {
             title: 'Atividades de Vida Diária (AVD Instrumental)',
-            description:
-              'Pontuação máxima do grupo: 4 pontos (independente de quantas respostas "Sim").',
+            description: 'Pontuação máxima do grupo: 4 pontos.',
             order: 3,
             questions: {
               create: [
@@ -121,43 +106,31 @@ async function main() {
                   type: QuestionType.MULTIPLE_CHOICE,
                   options: {
                     create: [
-                      {
-                        label: 'Não (ou não faz por outros motivos)',
-                        score: 0,
-                        order: 1,
-                      },
-                      { label: 'Sim', score: 4, order: 2 }, // Nota: Lógica de teto deve ser tratada no backend
-                    ],
-                  },
-                },
-                {
-                  statement:
-                    'Por causa de sua saúde ou condição física, você deixou de controlar seu dinheiro, gastos ou pagar as contas de sua casa?',
-                  order: 4,
-                  type: QuestionType.MULTIPLE_CHOICE,
-                  options: {
-                    create: [
-                      {
-                        label: 'Não (ou não controla por outros motivos)',
-                        score: 0,
-                        order: 1,
-                      },
+                      { label: 'Não', score: 0, order: 1 },
                       { label: 'Sim', score: 4, order: 2 },
                     ],
                   },
                 },
                 {
                   statement:
-                    'Por causa de sua saúde ou condição física, você deixou de realizar pequenos trabalhos domésticos, como lavar louça, arrumar a casa ou fazer limpeza leve?',
+                    'Por causa de sua saúde ou condição física, você deixou de controlar seu dinheiro?',
+                  order: 4,
+                  type: QuestionType.MULTIPLE_CHOICE,
+                  options: {
+                    create: [
+                      { label: 'Não', score: 0, order: 1 },
+                      { label: 'Sim', score: 4, order: 2 },
+                    ],
+                  },
+                },
+                {
+                  statement:
+                    'Por causa de sua saúde ou condição física, você deixou de realizar pequenos trabalhos domésticos?',
                   order: 5,
                   type: QuestionType.MULTIPLE_CHOICE,
                   options: {
                     create: [
-                      {
-                        label: 'Não (ou não faz por outros motivos)',
-                        score: 0,
-                        order: 1,
-                      },
+                      { label: 'Não', score: 0, order: 1 },
                       { label: 'Sim', score: 4, order: 2 },
                     ],
                   },
@@ -165,10 +138,7 @@ async function main() {
               ],
             },
           },
-
-          // ===================================
           // GRUPO 4: AVD BÁSICA
-          // ===================================
           {
             title: 'Atividades de Vida Diária (AVD Básica)',
             order: 4,
@@ -181,16 +151,13 @@ async function main() {
                 options: {
                   create: [
                     { label: 'Não', score: 0, order: 1 },
-                    { label: 'Sim', score: 6, order: 2 }, // Peso alto no IVCF
+                    { label: 'Sim', score: 6, order: 2 },
                   ],
                 },
               },
             },
           },
-
-          // ===================================
           // GRUPO 5: COGNIÇÃO
-          // ===================================
           {
             title: 'Cognição',
             order: 5,
@@ -204,19 +171,18 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 }, // Gatilho
+                      { label: 'Sim', score: 0, order: 2 },
                     ],
                   },
                 },
                 {
-                  statement:
-                    'Este esquecimento está piorando nos últimos meses?',
+                  statement: 'Este esquecimento está piorando nos últimos meses?',
                   order: 8,
                   type: QuestionType.MULTIPLE_CHOICE,
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 }, // Gatilho
+                      { label: 'Sim', score: 0, order: 2 },
                     ],
                   },
                 },
@@ -228,17 +194,14 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 4, order: 2 }, // Pontua aqui
+                      { label: 'Sim', score: 4, order: 2 },
                     ],
                   },
                 },
               ],
             },
           },
-
-          // ===================================
           // GRUPO 6: HUMOR
-          // ===================================
           {
             title: 'Humor',
             order: 6,
@@ -252,7 +215,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 }, // Gatilho para pontuação combinada ou individual
+                      { label: 'Sim', score: 0, order: 2 },
                     ],
                   },
                 },
@@ -264,17 +227,14 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 2, order: 2 }, // Pontua se sim em alguma das duas (verificar lógica no service)
+                      { label: 'Sim', score: 2, order: 2 },
                     ],
                   },
                 },
               ],
             },
           },
-
-          // ===================================
-          // GRUPO 7: MOBILIDADE (Com Subgrupos)
-          // ===================================
+          // GRUPO 7: MOBILIDADE
           {
             title: 'Mobilidade',
             order: 7,
@@ -292,8 +252,8 @@ async function main() {
                         type: QuestionType.MULTIPLE_CHOICE,
                         options: {
                           create: [
-                            { label: 'Não (Consegue)', score: 0, order: 1 },
-                            { label: 'Sim (Incapaz)', score: 1, order: 2 },
+                            { label: 'Não', score: 0, order: 1 },
+                            { label: 'Sim', score: 1, order: 2 },
                           ],
                         },
                       },
@@ -304,8 +264,8 @@ async function main() {
                         type: QuestionType.MULTIPLE_CHOICE,
                         options: {
                           create: [
-                            { label: 'Não (Consegue)', score: 0, order: 1 },
-                            { label: 'Sim (Incapaz)', score: 1, order: 2 },
+                            { label: 'Não', score: 0, order: 1 },
+                            { label: 'Sim', score: 1, order: 2 },
                           ],
                         },
                       },
@@ -313,12 +273,12 @@ async function main() {
                   },
                 },
                 {
-                  title: 'Capacidade aeróbica e força muscular',
+                  title: 'Capacidade aeróbica / Muscular',
                   order: 2,
                   questions: {
                     create: {
                       statement:
-                        'Você tem alguma das quatro condições abaixo? (Perda de peso não intencional >4.5kg no ano; IMC < 22; Circunferência panturrilha < 31; Teste marcha > 5 seg)',
+                        'Você tem alguma das quatro condições abaixo? (Perda de peso, IMC baixo, etc)',
                       order: 14,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -348,8 +308,7 @@ async function main() {
                         },
                       },
                       {
-                        statement:
-                          'Você teve duas ou mais quedas no último ano?',
+                        statement: 'Você teve duas ou mais quedas no último ano?',
                         order: 16,
                         type: QuestionType.MULTIPLE_CHOICE,
                         options: {
@@ -363,7 +322,7 @@ async function main() {
                   },
                 },
                 {
-                  title: 'Continência esfincteriana',
+                  title: 'Continência',
                   order: 4,
                   questions: {
                     create: {
@@ -383,10 +342,7 @@ async function main() {
               ],
             },
           },
-
-          // ===================================
-          // GRUPO 8: COMUNICAÇÃO (Com Subgrupos)
-          // ===================================
+          // GRUPO 8: COMUNICAÇÃO
           {
             title: 'Comunicação',
             order: 8,
@@ -398,7 +354,7 @@ async function main() {
                   questions: {
                     create: {
                       statement:
-                        'Você tem problemas de visão capazes de impedir a realização de alguma atividade do cotidiano? (É permitido o uso de óculos)',
+                        'Você tem problemas de visão capazes de impedir a realização de alguma atividade do cotidiano?',
                       order: 18,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -416,7 +372,7 @@ async function main() {
                   questions: {
                     create: {
                       statement:
-                        'Você tem problemas de audição capazes de impedir a realização de alguma atividade do cotidiano? (É permitido uso de aparelho)',
+                        'Você tem problemas de audição capazes de impedir a realização de alguma atividade do cotidiano?',
                       order: 19,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -431,18 +387,14 @@ async function main() {
               ],
             },
           },
-
-          // ===================================
-          // GRUPO 9: COMORBIDADES MÚLTIPLAS
-          // ===================================
+          // GRUPO 9: COMORBIDADES
           {
             title: 'Comorbidades Múltiplas',
-            description: 'Polipatologia, Polifarmácia e Internação Recente',
             order: 9,
             questions: {
               create: {
                 statement:
-                  'Você tem alguma das três condições abaixo? (5 ou mais doenças crônicas; 5 ou mais medicamentos diários; Internação nos últimos 6 meses)',
+                  'Você tem alguma das três condições? (Polipatologia, Polifarmácia, Internação recente)',
                 order: 20,
                 type: QuestionType.MULTIPLE_CHOICE,
                 options: {
@@ -459,18 +411,53 @@ async function main() {
     },
   });
 
+  // =========================================================================
+  // 2.1 RECUPERAR A ESTRUTURA PARA USAR NO LOOP (FLATTENING QUESTIONS)
+  // =========================================================================
+  // Precisamos buscar de volta para ter os IDs gerados das Questions e Options
+  const ivcfFull = await prisma.questionnaire.findUnique({
+    where: { id: createdIvcf.id },
+    include: {
+      groups: {
+        include: {
+          questions: { include: { options: true } },
+          subGroups: {
+            include: {
+              questions: { include: { options: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Cria uma lista plana de todas as questões para facilitar a iteração na hora de responder
+  const flatQuestions: any[] = [];
+  if (ivcfFull?.groups) {
+    ivcfFull.groups.forEach((group) => {
+      // Questões diretas do grupo
+      if (group.questions) {
+        flatQuestions.push(...group.questions);
+      }
+      // Questões dentro de subgrupos
+      if (group.subGroups) {
+        group.subGroups.forEach((sub) => {
+          if (sub.questions) {
+            flatQuestions.push(...sub.questions);
+          }
+        });
+      }
+    });
+  }
+
   // ==================================================
-  // 3. PREPARAÇÃO DE SENHA
+  // 3. SENHA PADRÃO E USUÁRIOS FIXOS
   // ==================================================
   const passwordHash = await hashPassword('senha123');
 
-  // ==================================================
-  // 4. USUÁRIOS FIXOS (PARA LOGIN)
-  // ==================================================
-
   console.log('👑 Criando Usuários Fixos...');
 
-  // 4.1 ADMIN (Manager)
+  // 3.1 ADMIN
   await prisma.user.create({
     data: {
       cpf: '00000000000',
@@ -482,7 +469,7 @@ async function main() {
     },
   });
 
-  // 4.2 MÉDICO FIXO
+  // 3.2 MÉDICO FIXO
   const fixedDoctor = await prisma.user.create({
     data: {
       cpf: '11111111111',
@@ -508,7 +495,7 @@ async function main() {
   }
 
   // ==================================================
-  // 5. ESTRUTURA (INSTITUIÇÃO E UNIDADES)
+  // 4. ESTRUTURA (INSTITUIÇÃO E UNIDADES)
   // ==================================================
   console.log('🏥 Criando Estrutura...');
 
@@ -548,10 +535,8 @@ async function main() {
   ]);
 
   // ==================================================
-  // 6. DADOS ALEATÓRIOS (VOLUME)
+  // 5. PROFISSIONAIS ALEATÓRIOS
   // ==================================================
-
-  // 6.1 Profissionais Aleatórios
   console.log('👨‍⚕️ Criando Profissionais Aleatórios...');
   for (let i = 0; i < 5; i++) {
     const name = faker.person.fullName();
@@ -567,8 +552,7 @@ async function main() {
           create: {
             email: faker.internet.email(),
             speciality: 'Fisioterapia',
-            speciality_normalized:
-              normalizeString('Fisioterapia') || 'fisioterapia',
+            speciality_normalized: 'fisioterapia',
           },
         },
       },
@@ -580,13 +564,16 @@ async function main() {
     }
   }
 
-  // 6.2 Pacientes e Avaliações
-  console.log('👴 Criando 20 Pacientes e Avaliações...');
+  // ==================================================
+  // 6. PACIENTES E DADOS CLÍNICOS (Questionários e Sensores)
+  // ==================================================
+  console.log('👴 Criando 20 Pacientes com Avaliações e Questionários...');
 
   for (let i = 0; i < 20; i++) {
     const sex = i % 2 === 0 ? 'male' : 'female';
     const name = faker.person.fullName({ sex });
 
+    // Cria o paciente
     const participantUser = await prisma.user.create({
       data: {
         cpf: faker.string.numeric(11),
@@ -616,31 +603,83 @@ async function main() {
 
     if (!participantUser.participant) continue;
     const participantId = participantUser.participant.id;
+    const randomHPId =
+      healthProsIds[Math.floor(Math.random() * healthProsIds.length)];
 
-    // --- Simulação: Paciente responde ao IVCF-20 ---
-    // Vamos simular que alguns responderam
-    if (Math.random() > 0.3) {
-      // 70% de chance de ter respondido
-      // Aqui poderíamos criar uma QuestionnaireResponse fake,
-      // mas como requer lógica de calcular score baseada nas opções,
-      // deixaremos apenas o formulário pronto (Questions) e o paciente criado.
+    // ------------------------------------------------------------------
+    // 6.1 RESPONDER QUESTIONÁRIO (Simulação)
+    // ------------------------------------------------------------------
+    // Vamos simular que 80% dos pacientes responderam ao IVCF-20
+    if (Math.random() > 0.2 && ivcfFull) {
+      const responseDate = faker.date.recent({ days: 90 });
+      let totalScore = 0;
+
+      // Prepara os dados das respostas (Answers)
+      const answersData = flatQuestions
+        .map((question) => {
+          // Seleciona uma opção aleatória (simulando resposta do paciente)
+          if (!question.options || question.options.length === 0) return null;
+
+          // Ponderação simples: dar preferência para pontuação 0 (saudável) na maioria das vezes para não gerar só idosos frágeis
+          const isHealthy = Math.random() > 0.4;
+          const selectedOption = isHealthy
+            ? question.options.find((o: any) => o.score === 0) ||
+              question.options[0]
+            : question.options[
+                Math.floor(Math.random() * question.options.length)
+              ];
+
+          // Acumula o score
+          totalScore += selectedOption.score;
+
+          return {
+            questionId: question.id,
+            selectedOptionId: selectedOption.id,
+          };
+        })
+        .filter((a) => a !== null); // Remove nulos caso alguma questao nao tenha opcao
+
+      // Define classificação baseada na soma (Lógica aproximada do IVCF-20)
+      // 0-6: Robusto | 7-14: Em Risco de Fragilização | >=15: Frágil
+      let classification = 'Robusto';
+      if (totalScore >= 7 && totalScore <= 14) {
+        classification = 'Em Risco de Fragilização';
+      } else if (totalScore >= 15) {
+        classification = 'Frágil';
+      }
+
+      // Cria a Response com as Answers aninhadas
+      await prisma.questionnaireResponse.create({
+        data: {
+          participantId: participantId,
+          healthProfessionalId: randomHPId,
+          questionnaireId: ivcfFull.id,
+          date: responseDate,
+          totalScore: totalScore,
+          classification: classification,
+          answers: {
+            create: answersData as any, // "as any" apenas para simplificar tipagem complexa no seed
+          },
+        },
+      });
     }
 
-    // --- Simulação: Avaliação Física (Sensor) ---
+    // ------------------------------------------------------------------
+    // 6.2 AVALIAÇÃO FÍSICA (Sensor)
+    // ------------------------------------------------------------------
     const numEvals = faker.number.int({ min: 1, max: 3 });
 
     for (let j = 0; j < numEvals; j++) {
-      const randomHPId =
-        healthProsIds[Math.floor(Math.random() * healthProsIds.length)];
       const randomUnit = units[Math.floor(Math.random() * units.length)];
       const date = faker.date.recent({ days: 60 });
       const timeInit = new Date(date);
-      const timeEnd = new Date(date.getTime() + 30000);
+      const timeEnd = new Date(date.getTime() + 30000); // 30 segundos depois
 
-      const sensorDataMock = Array.from({ length: 100 }).map((_, idx) => {
+      // Gera dados fake de acelerômetro
+      const sensorDataMock = Array.from({ length: 50 }).map((_, idx) => {
         const wave = Math.sin(idx * 0.2);
         return {
-          timestamp: new Date(timeInit.getTime() + idx * 20),
+          timestamp: new Date(timeInit.getTime() + idx * 100), // 10Hz aprox
           accel_x: wave * 0.5,
           accel_y: faker.number.float({ min: -0.1, max: 0.1 }),
           accel_z: 1.0 + wave * 0.5,
@@ -651,6 +690,7 @@ async function main() {
         };
       });
 
+      // Cria a avaliação com os dados do sensor
       await prisma.evaluation.create({
         data: {
           type: TypeEvaluation.FTSTS,
@@ -663,6 +703,15 @@ async function main() {
           sensorData: {
             createMany: {
               data: sensorDataMock,
+            },
+          },
+          // Opcional: Criar indicadores calculados
+          indicators: {
+            create: {
+              repetitionCount: faker.number.int({ min: 3, max: 10 }),
+              meanPower: faker.number.float({ min: 100, max: 300 }),
+              totalEnergy: faker.number.float({ min: 500, max: 2000 }),
+              classification: 'Normal',
             },
           },
         },
