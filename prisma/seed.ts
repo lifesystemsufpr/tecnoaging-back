@@ -643,7 +643,7 @@ async function main() {
       // 0-6: Robusto | 7-14: Em Risco de Fragilização | >=15: Frágil
       let classification = 'Robusto';
       if (totalScore >= 7 && totalScore <= 14) {
-        classification = 'Em Risco de Fragilização';
+        classification = 'Potencialmente Frágil';
       } else if (totalScore >= 15) {
         classification = 'Frágil';
       }
