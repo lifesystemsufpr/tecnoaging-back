@@ -1,9 +1,10 @@
-name: PROD - Build and Deploy to Backend Server (v2 with Python)
+name: PROD - Build and Deploy to Backend Server (Password Auth)
 
 on:
   push:
     branches:
       - main
+      - dev_v2
 
 jobs:
   deploy:
@@ -18,6 +19,7 @@ jobs:
       SSH_HOST: ${{ secrets.SSH_HOST || vars.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER || vars.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT || vars.SSH_PORT }}
+      SSH_PASSWORD: ${{ secrets.PRODSENHA }}
       APP_DIR:  TecnoAging_back
       PM2_APP:  TecnoAging-api
       PM2_PY_APP: TecnoAging-python
@@ -31,20 +33,20 @@ jobs:
         with:
           node-version: 22
 
-      - name: SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
 
       - name: Validar secrets/variáveis
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PASSWORD: ${{ secrets.PRODSENHA }}
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
           JWT_SECRET:      ${{ secrets.JWT_SECRET }}
         run: |
           set -euo pipefail
           
-          for v in SSH_PRIVATE_KEY SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
+          for v in SSH_PASSWORD SSH_HOST SSH_USER APP_DIR DATABASE_URL JWT_SECRET; do
             if [[ -z "${!v:-}" ]]; then
               echo "::error title=Missing::$v está vazio."
               exit 1
@@ -93,25 +95,27 @@ jobs:
       - name: Transfer Files
         run: |
           set -euo pipefail
+          export SSHPASS="${SSH_PASSWORD}"
           
           # Stop PM2 processes BEFORE transfer to release file locks
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "pm2 stop all || true" || true
+          sshpass -e ssh -o StrictHostKeyChecking=no -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "pm2 stop all || true" || true
           
-          ssh -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
+          sshpass -e ssh -o StrictHostKeyChecking=no -p "${SSH_PORT:-22}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ~/${APP_DIR}"
           
           # Use rsync to send artifacts to the server
           # Using --delete to ensure the remote directory mirrors the artifacts (clean state)
-          rsync -avz --delete \
-            -e "ssh -p ${SSH_PORT:-22}" \
+          sshpass -e rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no -p ${SSH_PORT:-22}" \
             deploy_artifact/ \
             "${SSH_USER}@${SSH_HOST}:~/${APP_DIR}/"
 
       - name: Deploy on Server
         run: |
           set -euo pipefail
-          ssh -p "${SSH_PORT:-22}" \
+          export SSHPASS="${SSH_PASSWORD}"
+          
+          sshpass -e ssh -p "${SSH_PORT:-22}" \
             -o StrictHostKeyChecking=no \
-            -o BatchMode=yes \
             -o LogLevel=ERROR \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             "${SSH_USER}@${SSH_HOST}" \
