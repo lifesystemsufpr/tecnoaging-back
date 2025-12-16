@@ -134,9 +134,10 @@ jobs:
           # Configurar Python Service
           # Tenta instalar Python se não existir
           if ! command -v python3 >/dev/null 2>&1; then
-            echo "Python 3 não encontrado. Instalando..."
-            sudo apt-get update
-            sudo apt-get install -y python3 python3-pip python3-venv
+            echo "Python 3 não encontrado. Certifique-se de que o python3 esteja instalado no servidor."
+            # sudo apt-get update
+            # sudo apt-get install -y python3 python3-pip python3-venv
+            exit 1
           fi
 
           if command -v python3 >/dev/null 2>&1; then
@@ -147,15 +148,17 @@ jobs:
               echo "Criando venv em python-service/venv..."
               if ! python3 -m venv python-service/venv; then
                   echo "Venv falhou. Tentando instalar pacote python3-venv..."
-                  rm -rf python-service/venv
+                  # rm -rf python-service/venv
                   
                   # Detecta versão (ex: 3.10)
-                  PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-                  sudo apt-get update
-                  sudo apt-get install -y "python${PY_VERSION}-venv" "python${PY_VERSION}-dev" || sudo apt-get install -y python3-venv python3-dev
+                  # PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+                  # sudo apt-get update
+                  # sudo apt-get install -y "python${PY_VERSION}-venv" "python${PY_VERSION}-dev" || sudo apt-get install -y python3-venv python3-dev
                   
-                  echo "Tentando criar venv novamente..."
-                  python3 -m venv python-service/venv
+                  # echo "Tentando criar venv novamente..."
+                  # python3 -m venv python-service/venv
+                  echo "Falha crítica ao criar venv. Verifique se python3-venv está instalado manualmente no servidor."
+                  exit 1
               fi
             fi
             
