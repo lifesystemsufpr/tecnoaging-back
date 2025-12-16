@@ -13,12 +13,13 @@ import { UserModule } from './modules/users/user.module';
 import { ManagerModule } from './modules/manager/manager.module';
 import { ResearcherModule } from './modules/researcher/researcher.module';
 import { HealthProfessionalModule } from './modules/health-professional/health-professional.module';
-import { PatientModule } from './modules/patient/patient.module';
 import { EvaluationModule } from './modules/evaluation/evaluation.module';
 import { HealthUnitModule } from './modules/health-unit/health-unit.module';
 import { InstitutionModule } from './modules/institution/institution.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
 import { appPrismaServiceOptions } from './shared/config/prisma-service-options';
+import { ParticipantModule } from './modules/participant/participant.module';
+import { QuestionnairesModule } from './modules/questionnaire/questionnaire.module';
 
 @Module({
   imports: [
@@ -40,10 +41,11 @@ import { appPrismaServiceOptions } from './shared/config/prisma-service-options'
     ManagerModule,
     ResearcherModule,
     HealthProfessionalModule,
-    PatientModule,
+    ParticipantModule,
     EvaluationModule,
     HealthUnitModule,
     InstitutionModule,
+    QuestionnairesModule,
   ],
   providers: [
     providePrismaClientExceptionFilter(),

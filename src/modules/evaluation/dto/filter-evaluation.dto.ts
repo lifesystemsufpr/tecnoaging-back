@@ -6,11 +6,11 @@ import { TypeEvaluation } from '@prisma/client';
 export class FilterEvaluationDto extends QueryDto {
   @IsOptional()
   @IsString()
-  patientCpf?: string;
+  participantCpf?: string;
 
   @IsOptional()
   @IsString()
-  patientName?: string;
+  participantName?: string;
 
   @IsOptional()
   @IsString()

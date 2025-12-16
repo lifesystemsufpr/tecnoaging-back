@@ -22,11 +22,11 @@ model User {
   updatedAt           DateTime            @default(now()) @updatedAt
 
   healthProfessional  HealthProfessional?
-  patient             Patient?
+  participant             Participant?
   researcher          Researcher?
 
   @@index([fullName_normalized])
-  @@map("tecnoAging_user")
+  @@map("user")
 }
 
 model Researcher {
@@ -56,6 +56,7 @@ model HealthProfessional {
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @default(now()) @updatedAt
 
+  appliedQuestionnaires QuestionnaireResponse[]
   evaluation            Evaluation[]
   user                  User         @relation(fields: [id], references: [id])
 
@@ -81,7 +82,7 @@ model Institution {
   @@map("institution")
 }
 
-model Patient {
+model Participant {
   id                   String              @id @unique
   birthday             DateTime            @db.Date
   weight               Int                 @default(0) 
@@ -100,10 +101,11 @@ model Patient {
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @default(now()) @updatedAt
 
+  questionnaireResponses QuestionnaireResponse[]
   evaluations          Evaluation[]
   user                 User                @relation(fields: [id], references: [id])
 
-  @@map("patient")
+  @@map("participant")
 }
 
 model SensorData {
@@ -130,7 +132,7 @@ model SensorData {
 
 model Evaluation {
   id                   String             @id @default(uuid())
-  patientId            String
+  participantId            String
   healthProfessionalId String
   healthcareUnitId     String
   date                 DateTime           @default(now()) @db.Date
@@ -143,12 +145,12 @@ model Evaluation {
 
   healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
   healthcareUnit       HealthcareUnit     @relation(fields: [healthcareUnitId], references: [id])
-  patient              Patient            @relation(fields: [patientId], references: [id])
+  participant              Participant            @relation(fields: [participantId], references: [id])
   sensorData           SensorData[]
   indicators           EvaluationIndicators?
 
 
-  @@index([patientId])
+  @@index([participantId])
   @@index([healthProfessionalId])
   @@index([healthcareUnitId])
   @@index([date])
@@ -174,6 +176,8 @@ model EvaluationIndicators {
   @@map("evaluation_indicators")
 }
 
+
+
 model HealthcareUnit {
   id              String       @id @default(uuid())
   name            String
@@ -197,9 +201,147 @@ model HealthcareUnit {
   @@map("healthcare_unit")
 }
 
+
+model Questionnaire {
+  id          String   @id @default(uuid())
+  title       String 
+  slug        String   @unique 
+  description String?  @db.Text
+  active      Boolean  @default(true)
+  version     String   @default("1.0")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  groups      QuestionGroup[]
+  responses   QuestionnaireResponse[] 
+
+  @@map("questionnaire")
+}
+
+model QuestionGroup {
+  id              String   @id @default(uuid())
+  title           String   
+  order           Int      
+  description     String?  @db.Text
+
+  questionnaireId String
+  questionnaire   Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  subGroups       QuestionSubGroup[]
+  questions       Question[] 
+
+  @@index([questionnaireId])
+  @@map("question_group")
+}
+
+model QuestionSubGroup {
+  id          String   @id @default(uuid())
+  title       String
+  order       Int
+  description String?  @db.Text
+
+  groupId     String
+  group       QuestionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  questions   Question[]
+
+  @@index([groupId])
+  @@map("question_subgroup")
+}
+
+model Question {
+  id          String       @id @default(uuid())
+  statement   String       @db.Text
+  order       Int
+  type        QuestionType 
+  required    Boolean      @default(true)
+  
+  groupId     String?
+  group       QuestionGroup? @relation(fields: [groupId], references: [id])
+  
+  subGroupId  String?
+  subGroup    QuestionSubGroup? @relation(fields: [subGroupId], references: [id])
+
+  options     QuestionOption[]
+  answers     Answer[]
+
+  @@map("question")
+}
+
+model QuestionOption {
+  id          String   @id @default(uuid())
+  label       String 
+  
+  score       Int      @default(0)
+  
+  order       Int      
+  
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  answers     Answer[] 
+
+  @@index([questionId])
+  @@map("question_option")
+}
+
+model QuestionnaireResponse {
+  id                   String   @id @default(uuid())
+  
+  totalScore           Int      @default(0)
+  classification       String?  
+  
+  date                 DateTime @default(now())
+
+  participantId        String
+  participant          Participant @relation(fields: [participantId], references: [id])
+  
+  healthProfessionalId String
+  healthProfessional   HealthProfessional @relation(fields: [healthProfessionalId], references: [id])
+
+  questionnaireId      String
+  questionnaire        Questionnaire @relation(fields: [questionnaireId], references: [id])
+
+  answers              Answer[]
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([participantId])
+  @@index([healthProfessionalId])
+  @@map("questionnaire_response")
+}
+
+model Answer {
+  id                      String   @id @default(uuid())
+  
+  questionnaireResponseId String
+  questionnaireResponse   QuestionnaireResponse @relation(fields: [questionnaireResponseId], references: [id], onDelete: Cascade)
+
+  questionId              String
+  question                Question @relation(fields: [questionId], references: [id])
+
+  selectedOptionId        String?
+  selectedOption          QuestionOption? @relation(fields: [selectedOptionId], references: [id])
+
+  valueText               String? 
+
+  @@index([questionnaireResponseId])
+  @@map("answer")
+}
+
+enum QuestionType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  MULTIPLE_CHOICE
+  SCALE
+}
+
 enum SystemRole {
   MANAGER
-  PATIENT
+  PARTICIPANT
   RESEARCHER
   HEALTH_PROFESSIONAL
 }

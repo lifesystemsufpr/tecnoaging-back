@@ -1,14 +1,14 @@
-import { CreatePatientDto } from './create-patient.dto';
+import { CreateParticipantDto } from './create-participant.dto';
 import { UpdateUserDto } from 'src/modules/users/dtos/update-user.dto';
 import { Type } from 'class-transformer';
 import { IsOptional, ValidateNested } from 'class-validator';
 import { OmitType, PartialType } from '@nestjs/swagger';
 
-class PatientDataOnlyDto extends OmitType(CreatePatientDto, [
+class ParticipantDataOnlyDto extends OmitType(CreateParticipantDto, [
   'user',
 ] as const) {}
 
-export class UpdatePatientDto extends PartialType(PatientDataOnlyDto) {
+export class UpdateParticipantDto extends PartialType(ParticipantDataOnlyDto) {
   @IsOptional()
   @ValidateNested()
   @Type(() => UpdateUserDto)
