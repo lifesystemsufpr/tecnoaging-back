@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "tecnoAging_user" (
+CREATE TABLE "user" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "cpf" TEXT NOT NULL,
     "fullName" TEXT NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE "researcher" (
     "institutionId" TEXT NOT NULL,
     "updatedAt" DATE NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    CONSTRAINT "researcher_id_fkey" FOREIGN KEY ("id") REFERENCES "tecnoAging_user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "researcher_id_fkey" FOREIGN KEY ("id") REFERENCES "user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "researcher_institutionId_fkey" FOREIGN KEY ("institutionId") REFERENCES "institution" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
@@ -56,12 +56,12 @@ CREATE TABLE "health_professional" (
     "email" TEXT NOT NULL,
     "updatedAt" DATE NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    CONSTRAINT "health_professional_id_fkey" FOREIGN KEY ("id") REFERENCES "tecnoAging_user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "health_professional_id_fkey" FOREIGN KEY ("id") REFERENCES "user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "health_professional_specialityId_fkey" FOREIGN KEY ("specialityId") REFERENCES "speciality" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
-CREATE TABLE "patient" (
+CREATE TABLE "participant" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "birthday" DATE NOT NULL,
     "scholarship" TEXT NOT NULL,
@@ -77,19 +77,19 @@ CREATE TABLE "patient" (
     "neighborhood" TEXT NOT NULL,
     "updatedAt" DATE NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
-    CONSTRAINT "patient_id_fkey" FOREIGN KEY ("id") REFERENCES "tecnoAging_user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT "participant_id_fkey" FOREIGN KEY ("id") REFERENCES "user" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "evaluation" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "type" TEXT NOT NULL,
-    "patientId" TEXT NOT NULL,
+    "participantId" TEXT NOT NULL,
     "healthProfessionalId" TEXT NOT NULL,
     "healthcareUnitId" TEXT NOT NULL,
     "date" DATE NOT NULL,
     "updatedAt" DATE NOT NULL,
-    CONSTRAINT "evaluation_patientId_fkey" FOREIGN KEY ("patientId") REFERENCES "patient" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "evaluation_participantId_fkey" FOREIGN KEY ("participantId") REFERENCES "participant" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "evaluation_healthProfessionalId_fkey" FOREIGN KEY ("healthProfessionalId") REFERENCES "health_professional" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "evaluation_healthcareUnitId_fkey" FOREIGN KEY ("healthcareUnitId") REFERENCES "healthcare_unit" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -108,7 +108,7 @@ CREATE TABLE "sensor_data" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "tecnoAging_user_cpf_key" ON "tecnoAging_user"("cpf");
+CREATE UNIQUE INDEX "user_cpf_key" ON "user"("cpf");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "researcher_id_key" ON "researcher"("id");
@@ -123,4 +123,4 @@ CREATE UNIQUE INDEX "health_professional_id_key" ON "health_professional"("id");
 CREATE UNIQUE INDEX "health_professional_email_key" ON "health_professional"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "patient_id_key" ON "patient"("id");
+CREATE UNIQUE INDEX "participant_id_key" ON "participant"("id");

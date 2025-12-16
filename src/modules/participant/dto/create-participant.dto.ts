@@ -12,18 +12,18 @@ import {
 } from 'class-validator';
 import { CreateUserDto } from 'src/modules/users/dtos/create-user.dto';
 
-export class CreatePatientUserDto extends OmitType(CreateUserDto, [
+export class CreateParticipantUserDto extends OmitType(CreateUserDto, [
   'role',
   'password',
 ]) {}
 
-export class CreatePatientDto {
+export class CreateParticipantDto {
   @ValidateNested()
-  @Type(() => CreatePatientUserDto)
-  user: CreatePatientUserDto;
+  @Type(() => CreateParticipantUserDto)
+  user: CreateParticipantUserDto;
 
   @ApiProperty({
-    description: 'Date of birth of the patient',
+    description: 'Date of birth of the participant',
     example: '1945-12-31',
   })
   @IsNotEmpty()
@@ -35,7 +35,7 @@ export class CreatePatientDto {
   birthday: Date;
 
   @ApiProperty({
-    description: 'The scholarship status of the patient',
+    description: 'The scholarship status of the participant',
     example: 'HIGHER_EDUCATION_COMPLETE',
   })
   @IsNotEmpty()
@@ -43,7 +43,7 @@ export class CreatePatientDto {
   scholarship: Scholarship;
 
   @ApiProperty({
-    description: 'The socio-economic level of the patient',
+    description: 'The socio-economic level of the participant',
     example: 'C',
   })
   @IsNotEmpty()
@@ -51,7 +51,7 @@ export class CreatePatientDto {
   socio_economic_level: SocialEconomicLevel;
 
   @ApiProperty({
-    description: 'The weight of the patient',
+    description: 'The weight of the participant',
     example: 70,
   })
   @IsNotEmpty()
@@ -59,7 +59,7 @@ export class CreatePatientDto {
   weight: number;
 
   @ApiProperty({
-    description: 'The height of the patient',
+    description: 'The height of the participant',
     example: 1.75,
   })
   @IsNotEmpty()
@@ -67,7 +67,7 @@ export class CreatePatientDto {
   height: number;
 
   @ApiProperty({
-    description: 'The zip code of the patient',
+    description: 'The zip code of the participant',
     example: '12345-678',
   })
   @IsNotEmpty()
@@ -75,7 +75,7 @@ export class CreatePatientDto {
   zipCode: string;
 
   @ApiProperty({
-    description: 'The street address of the patient',
+    description: 'The street address of the participant',
     example: '123 Main St',
   })
   @IsNotEmpty()
@@ -83,7 +83,7 @@ export class CreatePatientDto {
   street: string;
 
   @ApiProperty({
-    description: 'The street number of the patient',
+    description: 'The street number of the participant',
     example: '456',
   })
   @IsNotEmpty()
@@ -91,14 +91,14 @@ export class CreatePatientDto {
   number: string;
 
   @ApiProperty({
-    description: 'The complement of the address of the patient',
+    description: 'The complement of the address of the participant',
     example: 'Apt 789',
   })
   @IsString()
   complement: string;
 
   @ApiProperty({
-    description: 'The neighborhood of the patient',
+    description: 'The neighborhood of the participant',
     example: 'Centro',
   })
   @IsNotEmpty()
@@ -106,7 +106,7 @@ export class CreatePatientDto {
   neighborhood: string;
 
   @ApiProperty({
-    description: 'The city of the patient',
+    description: 'The city of the participant',
     example: 'Curitiba',
   })
   @IsNotEmpty()
@@ -114,7 +114,7 @@ export class CreatePatientDto {
   city: string;
 
   @ApiProperty({
-    description: 'The state of the patient',
+    description: 'The state of the participant',
     example: 'PR',
   })
   @IsNotEmpty()
