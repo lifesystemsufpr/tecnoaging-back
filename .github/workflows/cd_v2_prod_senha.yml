@@ -38,6 +38,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sshpass
 
+      - name: Debug Network Connectivity
+        run: |
+          echo "Public IP of Runner:"
+          curl -s http://checkip.amazonaws.com
+          
+          echo "Ping host:"
+          ping -c 3 ${{ secrets.SSH_HOST || vars.SSH_HOST }} || true
+          
+          echo "Test TCP port 22 (nc):"
+          nc -zv -w 5 ${{ secrets.SSH_HOST || vars.SSH_HOST }} ${{ secrets.SSH_PORT || vars.SSH_PORT || 22 }} || echo "Port 22 Connection Failed"
+
       - name: Validar secrets/variáveis
         env:
           SSH_PASSWORD: ${{ secrets.PRODSENHA }}
