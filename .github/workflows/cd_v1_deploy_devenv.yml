@@ -1,0 +1,180 @@
+name: DEVENV - Deploy Backend
+
+on:
+  push:
+    branches:
+      - refactor/deploy-dev
+
+jobs:
+  deploy:
+    name: Deploy Backend (DEVENV)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      # SSH - servidor DEVENV (isolado)
+      SSH_HOST: ${{ secrets.DEVENV_SSH_HOST }}
+      SSH_USER: ${{ secrets.DEVENV_SSH_USER }}
+      SSH_PORT: ${{ secrets.DEVENV_SSH_PORT }}
+
+      # Diretório de deploy no servidor
+      APP_DIR: /opt/tecnoaging/back
+
+      # Processos PM2
+      PM2_APP: TecnoAging-api
+      PM2_PY_APP: TecnoAging-python
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate required secrets
+        run: |
+          set -euo pipefail
+
+          REQUIRED_SECRETS=(
+            DEVENV_SSH_HOST
+            DEVENV_SSH_USER
+            DEVENV_SSH_PORT
+            DEVENV_SSH_PRIVATE_KEY
+          )
+
+          for SECRET in "${REQUIRED_SECRETS[@]}"; do
+            if [ -z "${!SECRET:-}" ]; then
+              echo "::error title=Missing secret::$SECRET is not defined"
+              exit 1
+            fi
+          done
+
+      - name: Start SSH agent and add key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEVENV_SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+
+      - name: Build backend
+        run: |
+          set -euo pipefail
+          npm run build
+
+      - name: Prepare deploy artifact
+        run: |
+          set -euo pipefail
+
+          rm -rf deploy_artifact
+          mkdir deploy_artifact
+
+          cp -r dist deploy_artifact/
+          cp package.json package-lock.json deploy_artifact/
+
+          # Prisma (se existir)
+          if [ -d "prisma" ]; then
+            cp -r prisma deploy_artifact/
+          fi
+
+          # PM2 ecosystem (se existir)
+          if [ -f "ecosystem.config.js" ]; then
+            cp ecosystem.config.js deploy_artifact/
+          fi
+
+          # Python service (se existir)
+          if [ -d "python-service" ]; then
+            cp -r python-service deploy_artifact/
+          fi
+
+      - name: Deploy artifact to server
+        run: |
+          set -euo pipefail
+
+          echo "Deploying to ${SSH_USER}@${SSH_HOST}:${APP_DIR}"
+
+          # Garante diretório no servidor
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ${APP_DIR}"
+
+          # Validação de segurança antes do rsync --delete
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            if [ ! -d "${APP_DIR}" ]; then
+              echo "ERROR: APP_DIR does not exist: ${APP_DIR}"
+              exit 1
+            fi
+          EOF
+
+          # Envia artefato (estado espelhado)
+          rsync -avz --delete \
+            -e "ssh -p ${SSH_PORT}" \
+            deploy_artifact/ \
+            "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
+
+      - name: Install production dependencies on server
+        run: |
+          set -euo pipefail
+
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            set -euo pipefail
+            cd "${APP_DIR}"
+
+            node -v
+            npm -v
+
+            npm ci --omit=dev
+          EOF
+
+      - name: Run database migrations (Prisma)
+        run: |
+          set -euo pipefail
+
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            set -euo pipefail
+            cd "${APP_DIR}"
+
+            if [ -d "prisma" ]; then
+              npx prisma migrate deploy
+            else
+              echo "No prisma directory found, skipping migrations"
+            fi
+          EOF
+
+      - name: Restart backend services with PM2
+        run: |
+          set -euo pipefail
+
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            set -euo pipefail
+            cd "${APP_DIR}"
+
+            # Garante PM2 disponível
+            command -v pm2 >/dev/null 2>&1 || npm install -g pm2
+
+            # Reinício controlado
+            pm2 describe "${PM2_PY_APP}" >/dev/null 2>&1 && pm2 restart "${PM2_PY_APP}" || true
+            pm2 describe "${PM2_APP}"    >/dev/null 2>&1 && pm2 restart "${PM2_APP}"    || true
+
+            # Start se não existir
+            if ! pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
+              if [ -f ecosystem.config.js ]; then
+                pm2 start ecosystem.config.js
+              else
+                pm2 start dist/main.js --name "${PM2_APP}"
+              fi
+            fi
+
+            pm2 save
+          EOF
