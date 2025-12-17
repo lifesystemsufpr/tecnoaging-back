@@ -36,20 +36,20 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate required secrets
+      # ✅ VALIDAÇÃO CORRETA (envs reais do job)
+      - name: Validate required environment variables
         run: |
           set -euo pipefail
 
-          REQUIRED_SECRETS=(
-            DEVENV_SSH_HOST
-            DEVENV_SSH_USER
-            DEVENV_SSH_PORT
-            DEVENV_SSH_PRIVATE_KEY
+          REQUIRED_VARS=(
+            SSH_HOST
+            SSH_USER
+            SSH_PORT
           )
 
-          for SECRET in "${REQUIRED_SECRETS[@]}"; do
-            if [ -z "${!SECRET:-}" ]; then
-              echo "::error title=Missing secret::$SECRET is not defined"
+          for VAR in "${REQUIRED_VARS[@]}"; do
+            if [ -z "${!VAR:-}" ]; then
+              echo "::error title=Missing environment variable::$VAR is not defined"
               exit 1
             fi
           done
