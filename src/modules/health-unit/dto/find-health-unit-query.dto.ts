@@ -8,7 +8,6 @@ import {
 import { Transform, Type } from 'class-transformer';
 import { QueryDto } from 'src/shared/dto/query.dto';
 
-// Enum auxiliar para garantir que só ordenem por campos que existem
 export enum HealthcareUnitOrderBy {
   NAME = 'name',
   CREATED_AT = 'createdAt',
@@ -21,7 +20,6 @@ export enum SortOrder {
 }
 
 export class FindHealthcareUnitsQueryDto extends QueryDto {
-  // --- Filtros de Texto ---
   @IsOptional()
   @IsString()
   city?: string;
@@ -39,7 +37,6 @@ export class FindHealthcareUnitsQueryDto extends QueryDto {
   @IsBoolean()
   active?: boolean;
 
-  // --- Filtros de Data (Audit) ---
   @IsOptional()
   @Type(() => Date)
   @IsDate()
@@ -50,7 +47,6 @@ export class FindHealthcareUnitsQueryDto extends QueryDto {
   @IsDate()
   endDate?: Date;
 
-  // --- Ordenação Dinâmica ---
   @IsOptional()
   @IsEnum(HealthcareUnitOrderBy)
   orderBy?: HealthcareUnitOrderBy = HealthcareUnitOrderBy.NAME;
