@@ -11,9 +11,9 @@
     "seed": "npx prisma db seed",
     "db:backfill": "ts-node prisma/backfill.ts",
     "start": "nest start",
-    "start:dev": "nest start --watch",
+    "dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "prod": "node dist/main",
     "start:pm2": "pm2 start ecosystem.config.js",
     "stop:pm2": "pm2 stop tecno-aging-api",
     "restart:pm2": "pm2 restart tecno-aging-api",
@@ -32,7 +32,7 @@
     "prisma:studio": "npx prisma studio",
     "prisma:seed": "npx prisma db seed",
     "prisma:init": "npx prisma generate && npx prisma migrate dev && npx prisma db seed",
-    "git:cls": "git checkout main && git pull && git fetch --prune && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -d"
+    "git:cls": "git checkout main && git pull && git fetch --prune && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs -r git branch -d && git checkout -"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

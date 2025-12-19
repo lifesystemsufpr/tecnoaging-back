@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { HealthUnitService } from './health-unit.service';
 import { CreateHealthUnitDto } from './dto/create-health-unit.dto';
@@ -13,6 +14,7 @@ import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
+import { FindHealthcareUnitsQueryDto } from './dto/find-health-unit-query.dto';
 
 @Controller('health-unit')
 @ApiBearerAuth()
@@ -26,8 +28,8 @@ export class HealthUnitController {
   }
 
   @Get()
-  findAll() {
-    return this.healthUnitService.findAll();
+  findAll(@Query() query: FindHealthcareUnitsQueryDto) {
+    return this.healthUnitService.findAll(query);
   }
 
   @Get(':id')

@@ -4,6 +4,7 @@ import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
 import { PrismaService } from 'nestjs-prisma';
 import { Prisma } from '@prisma/client';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import { FindHealthcareUnitsQueryDto } from './dto/find-health-unit-query.dto';
 
 @Injectable()
 export class HealthUnitService {
@@ -22,10 +23,69 @@ export class HealthUnitService {
     });
   }
 
-  async findAll() {
-    return await this.prisma.healthcareUnit.findMany({
-      where: { active: true },
-    });
+  async findAll(query: FindHealthcareUnitsQueryDto) {
+    const {
+      page = 1,
+      pageSize = 10,
+      search,
+      city,
+      state,
+      neighborhood,
+      active,
+      startDate,
+      endDate,
+      orderBy,
+      sortOrder,
+    } = query;
+
+    const where: Prisma.HealthcareUnitWhereInput = {
+      AND: [
+        city ? { city: { contains: city, mode: 'insensitive' } } : {},
+        state ? { state: { contains: state, mode: 'insensitive' } } : {},
+        neighborhood
+          ? { neighborhood: { contains: neighborhood, mode: 'insensitive' } }
+          : {},
+        active !== undefined ? { active } : {},
+        // Lógica de Data
+        startDate || endDate
+          ? {
+              createdAt: {
+                gte: startDate,
+                lte: endDate,
+              },
+            }
+          : {},
+      ],
+      OR: search
+        ? [
+            { name: { contains: search, mode: 'insensitive' } },
+            { name_normalized: { contains: search, mode: 'insensitive' } },
+            { zipCode: { contains: search } },
+          ]
+        : undefined,
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.healthcareUnit.findMany({
+        where,
+        take: Number(pageSize),
+        skip: (Number(page) - 1) * Number(pageSize),
+        orderBy: {
+          [orderBy || 'name']: sortOrder || 'asc',
+        },
+      }),
+      this.prisma.healthcareUnit.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page: Number(page),
+        pageSize: Number(pageSize),
+        total,
+        totalPages: Math.ceil(total / Number(pageSize)),
+      },
+    };
   }
 
   async findOne(id: string) {
