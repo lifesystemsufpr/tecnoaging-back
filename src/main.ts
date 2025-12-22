@@ -78,8 +78,11 @@ async function bootstrap() {
     });
   }
 
-  await app.listen(nestConfig.port, '0.0.0.0');
-  logger.log(
+  const port = Number(nestConfig.port) || 3333;
+  await app.listen(port, '127.0.0.1');
+  
+  console.log(`[BOOT] TecnoAging API listening on ${port}`);
+  logger.log(    
     `[${nestConfig.environment}] Application is running on: ${await app.getUrl()}`,
   );
 }

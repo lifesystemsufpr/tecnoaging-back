@@ -35,6 +35,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
+
 
       # ✅ VALIDAÇÃO CORRETA (envs reais do job)
       - name: Validate required environment variables
@@ -200,8 +202,12 @@ jobs:
             command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
             # Reinício controlado
+
+            # Backend (NestJS)
+            pm2 describe "${PM2_APP}" >/dev/null 2>&1 && pm2 reload ecosystem.config.js --env development || pm2 start ecosystem.config.js --env development
+
+            # Python service
             pm2 describe "${PM2_PY_APP}" >/dev/null 2>&1 && pm2 restart "${PM2_PY_APP}" || true
-            pm2 describe "${PM2_APP}"    >/dev/null 2>&1 && pm2 restart "${PM2_APP}"    || true
 
             # Start se não existir
             if ! pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
