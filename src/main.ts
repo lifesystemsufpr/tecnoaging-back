@@ -14,15 +14,13 @@ import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api');
   const logger = new Logger('AppInitializer');
 
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ limit: '50mb', extended: true }));
   app.use(cookieParser());
   logger.log('Starting application...');
-
-  // Set global prefix
-  //app.setGlobalPrefix('backend');
 
   // Validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -81,7 +79,6 @@ async function bootstrap() {
   const port = Number(nestConfig.port) || 3333;
   await app.listen(port, '127.0.0.1');
   
-  console.log(`[BOOT] TecnoAging API listening on ${port}`);
   logger.log(    
     `[${nestConfig.environment}] Application is running on: ${await app.getUrl()}`,
   );
