@@ -13,6 +13,7 @@ import { BaseService } from 'src/shared/services/base.service';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
 import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
 import { HttpService } from '@nestjs/axios';
+import { isAxiosError } from 'axios';
 import { lastValueFrom } from 'rxjs';
 
 type EvaluationWithDetails = Evaluation & {
@@ -32,23 +33,31 @@ export type EvaluationResponse = Omit<
   healthProfessional: FormattedHP;
 };
 
-// Interface matching the Python Service response (keys kept in PT-BR as per Python script)
+interface PythonCycleDetail {
+  Ciclo: number;
+  'Tempo total (s)': number;
+  'Tempo levantar (s)': number;
+  'Tempo sentar (s)': number;
+  'Frequência (Hz)': number;
+  'Potência média ciclo (J/s)': number;
+  'Vel. extensão levantar (°/s)': number;
+  'Vel. flexão sentar (°/s)': number;
+}
+
 interface PythonResponse {
-  timeseries_filtrada: {
-    time_offset: number;
-    accel_x: number;
-    accel_y: number;
-    accel_z: number;
-    gyro_x: number;
-    gyro_y: number;
-    gyro_z: number;
-  }[];
-  metricas: {
-    num_repeticoes: number;
-    potencia_media: number;
+  status: string;
+  metricas_globais: {
+    repeticoes: number;
+    potencia_media_global: number;
     energia_total: number;
+    tempo_total_acumulado: number;
     classificacao: string;
   };
+  detalhes_ciclos: PythonCycleDetail[];
+  timeseries_processada: {
+    t: number;
+    val: number;
+  }[];
 }
 
 type EvaluationQueryResult = Omit<
@@ -168,7 +177,6 @@ export class EvaluationService extends BaseService<
       age: age,
     };
 
-    // Fire and Forget processing
     this.processEvaluationData(evaluation.id, userProfile).catch((err) => {
       this.logger.error(
         `Error processing evaluation ${evaluation.id} automatically`,
@@ -200,9 +208,6 @@ export class EvaluationService extends BaseService<
       throw new NotFoundException('No raw sensor data found.');
     }
 
-    const initialTimestamp = rawData[0].timestamp.getTime();
-
-    // Constructing payload for Python (Keys must remain in PT-BR/Snake Case as expected by the script)
     const pythonPayload = {
       peso: userProfile.weight,
       altura: userProfile.height,
@@ -215,7 +220,7 @@ export class EvaluationService extends BaseService<
         gyro_x: d.gyro_x,
         gyro_y: d.gyro_y,
         gyro_z: d.gyro_z,
-        timestamp: i + 1, // Sending frame index instead of raw timestamp
+        timestamp: i / 60.0,
       })),
     };
 
@@ -231,37 +236,24 @@ export class EvaluationService extends BaseService<
         ),
       );
 
-      const dataToSave = result.timeseries_filtrada.map((p) => ({
-        evaluationId: evaluationId,
-        filtered: true,
-        timestamp: new Date(initialTimestamp + p.time_offset * 1000),
-        accel_x: p.accel_x,
-        accel_y: p.accel_y,
-        accel_z: p.accel_z,
-        gyro_x: p.gyro_x,
-        gyro_y: p.gyro_y,
-        gyro_z: p.gyro_z,
-      }));
-
-      await this.prisma.$transaction([
-        this.prisma.sensorData.createMany({
-          data: dataToSave,
-        }),
-        this.prisma.evaluationIndicators.create({
-          data: {
-            evaluationId: evaluationId,
-            // Mapping Python response (PT) to Database (EN)
-            repetitionCount: result.metricas.num_repeticoes,
-            meanPower: result.metricas.potencia_media,
-            totalEnergy: result.metricas.energia_total,
-            classification: result.metricas.classificacao,
-          },
-        }),
-      ]);
-
-      return result.metricas;
-    } catch (error) {
-      this.logger.error('Error communicating with Python service', error);
+      await this.prisma.evaluationIndicators.create({
+        data: {
+          evaluationId: evaluationId,
+          repetitionCount: result.metricas_globais.repeticoes,
+          meanPower: result.metricas_globais.potencia_media_global,
+          totalEnergy: result.metricas_globais.energia_total,
+          classification: result.metricas_globais.classificacao,
+        },
+      });
+      return result.metricas_globais;
+    } catch (error: unknown) {
+      this.logger.error(
+        'Error communicating with Python service',
+        error as any,
+      );
+      if (isAxiosError(error) && error.response) {
+        this.logger.error(JSON.stringify(error.response.data));
+      }
       throw new Error('Failed to process biomechanical data.');
     }
   }
@@ -283,7 +275,7 @@ export class EvaluationService extends BaseService<
       where: { id },
       include: {
         sensorData: {
-          where: { filtered: true },
+          where: { filtered: false },
           orderBy: { timestamp: 'asc' },
         },
         indicators: true,
@@ -295,7 +287,6 @@ export class EvaluationService extends BaseService<
 
     if (!evaluation) throw new NotFoundException('Evaluation not found');
 
-    // 1. Format SENSOR block (Columns + Stats)
     const initialStats: SensorStatsMap = {
       ax: { min: Infinity, max: -Infinity, sum: 0 },
       ay: { min: Infinity, max: -Infinity, sum: 0 },
@@ -358,7 +349,6 @@ export class EvaluationService extends BaseService<
       stats: finalStats,
     };
 
-    // 2. Format DERIVED block (Indicators from DB)
     const participantAge = this.calculateAge(
       evaluation.participant.birthday,
       evaluation.date,
@@ -391,15 +381,10 @@ export class EvaluationService extends BaseService<
       overallClassification: evaluation.indicators?.classification || 'N/A',
     };
 
-    const cycleBlock = {
-      min: { total: 0, stand: 0, sit: 0 },
-      max: { total: 0, stand: 0, sit: 0 },
-    };
-
     return {
       sensor: sensorBlock,
       derived: derivedBlock,
-      cycle: cycleBlock,
+      cycles: null,
     };
   }
 
