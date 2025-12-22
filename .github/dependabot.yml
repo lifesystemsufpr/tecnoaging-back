@@ -1,0 +1,48 @@
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"          # raiz do backend
+    schedule:
+      interval: "weekly"    # evita ruído diário
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Sao_Paulo"
+
+    # 👉 Branch alvo
+    target-branch: "dev"
+
+    # Limita quantidade de PRs abertos
+    open-pull-requests-limit: 5
+
+    # Agrupamento inteligente (menos PRs)
+    groups:
+      nestjs:
+        patterns:
+          - "@nestjs/*"
+
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/client"
+
+      tooling:
+        patterns:
+          - "eslint*"
+          - "prettier"
+          - "typescript"
+          - "ts-node"
+
+    # Ignorar updates perigosos ou ruidosos
+    ignore:
+      - dependency-name: "node"
+      - dependency-name: "npm"
+
+    # Labels automáticos (ajuda triagem)
+    labels:
+      - "dependencies"
+      - "dependabot"
+
+    # Mensagem padrão
+    commit-message:
+      prefix: "chore(deps)"
