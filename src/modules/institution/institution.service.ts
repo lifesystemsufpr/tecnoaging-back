@@ -23,11 +23,11 @@ export class InstitutionService {
   }
 
   findAll() {
-    return this.prisma.institution.findMany();
+    return this.prisma.institution.findMany({ where: { active: true } });
   }
 
   findOne(id: string) {
-    return this.prisma.institution.findUnique({ where: { id } });
+    return this.prisma.institution.findUnique({ where: { id, active: true } });
   }
 
   update(id: string, updateInstitutionDto: UpdateInstitutionDto) {
@@ -46,8 +46,19 @@ export class InstitutionService {
     });
   }
 
-  // só para testar
-  remove(id: string) {
-    return this.prisma.institution.delete({ where: { id } });
+  async remove(id: string) {
+    await this.findOne(id);
+
+    return this.prisma.institution.update({
+      where: { id },
+      data: { active: false },
+    });
+  }
+
+  async reactivate(id: string) {
+    return this.prisma.institution.update({
+      where: { id },
+      data: { active: true },
+    });
   }
 }
