@@ -3,7 +3,7 @@ import { UserService } from '../users/user.service';
 import { CreateManagerDto } from './dto/create-manager.dto';
 import { UpdateManagerDto } from './dto/update-manager.dto';
 import { Prisma, SystemRole, User } from '@prisma/client';
-import { PrismaService } from 'nestjs-prisma';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { QueryDto } from 'src/shared/dto/query.dto';
 
 type ManagerResponse = Omit<User, 'password'>;

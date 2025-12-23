@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
-import { PrismaService } from 'nestjs-prisma';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { UserService } from '../users/user.service';
 import { Participant, Prisma, SystemRole, User } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
@@ -183,6 +183,19 @@ export class ParticipantService extends BaseService<
       });
 
       await this.userService.update(id, { active: false }, tx);
+
+      return participant;
+    });
+  }
+
+  async reactivate(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const participant = await tx.participant.update({
+        where: { id },
+        data: { active: true },
+      });
+
+      await this.userService.update(id, { active: true }, tx);
 
       return participant;
     });
