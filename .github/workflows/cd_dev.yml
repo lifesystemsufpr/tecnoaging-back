@@ -37,6 +37,11 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Debug workspace
+        run: |
+          pwd
+          ls -la
+      
       # Instalação limpa no runner (CORRETO)
       - name: Install dependencies (CI)
         run: npm ci
