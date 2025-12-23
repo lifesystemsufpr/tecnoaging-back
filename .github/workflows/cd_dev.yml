@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - dev
-  pull_request:
-    branches:
-      - dev
 
 permissions:
   contents: read
@@ -21,15 +18,12 @@ jobs:
         shell: bash
 
     env:
-      # SSH - servidor DEVENV (isolado)
       SSH_HOST: ${{ secrets.DEVENV_SSH_HOST }}
       SSH_USER: ${{ secrets.DEVENV_SSH_USER }}
       SSH_PORT: ${{ secrets.DEVENV_SSH_PORT }}
 
-      # Diretório de deploy no servidor
       APP_DIR: /opt/tecnoaging/back
 
-      # Processos PM2
       PM2_APP: TecnoAging-api
       PM2_PY_APP: TecnoAging-python
 
@@ -37,194 +31,74 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (LTS)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
 
+      # Instalação limpa no runner (CORRETO)
+      - name: Install dependencies (CI)
+        run: npm ci
 
-      # ✅ VALIDAÇÃO CORRETA (envs reais do job)
-      - name: Validate required environment variables
-        run: |
-          set -euo pipefail
+      - name: Build backend
+        run: npm run build
 
-          REQUIRED_VARS=(
-            SSH_HOST
-            SSH_USER
-            SSH_PORT
-          )
-
-          for VAR in "${REQUIRED_VARS[@]}"; do
-            if [ -z "${!VAR:-}" ]; then
-              echo "::error title=Missing environment variable::$VAR is not defined"
-              exit 1
-            fi
-          done
-
-      - name: Start SSH agent and add key
+      - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.DEVENV_SSH_PRIVATE_KEY }}
 
       - name: Add server to known_hosts
         run: |
-          set -e
           mkdir -p ~/.ssh
           ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
 
-      - name: Install dependencies
-        run: |
-          set -euo pipefail
-          npm ci
-
-      - name: Build backend
-        run: |
-          set -euo pipefail
-          npm run build
-
       - name: Prepare deploy artifact
         run: |
-          set -euo pipefail
-
           rm -rf deploy_artifact
           mkdir deploy_artifact
 
           cp -r dist deploy_artifact/
           cp package.json package-lock.json deploy_artifact/
 
-          # Prisma (se existir)
-          if [ -d "prisma" ]; then
-            cp -r prisma deploy_artifact/
-          fi
-
-          # PM2 ecosystem (se existir)
-          if [ -f "ecosystem.config.js" ]; then
-            cp ecosystem.config.js deploy_artifact/
-          fi
-
-          # Python service (se existir)
-          if [ -d "python-service" ]; then
-            cp -r python-service deploy_artifact/
-          fi
+          [ -d prisma ] && cp -r prisma deploy_artifact/
+          [ -f ecosystem.config.js ] && cp ecosystem.config.js deploy_artifact/
+          [ -d python-service ] && cp -r python-service deploy_artifact/
 
       - name: Deploy artifact to server
         run: |
-          set -euo pipefail
-
-          echo "Deploying to ${SSH_USER}@${SSH_HOST}:${APP_DIR}"
-
-          # Garante diretório no servidor
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ${APP_DIR}"
 
-          # Validação de segurança antes do rsync --delete
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            if [ ! -d "${APP_DIR}" ]; then
-              echo "ERROR: APP_DIR does not exist: ${APP_DIR}"
-              exit 1
-            fi
-          EOF
-
-          # Envia artefato (estado espelhado)
           rsync -avz --delete \
-          --exclude=".env" \
-          --exclude=".env.*" \
-          --exclude="logs/" \
-          --exclude="uploads/" \
-          -e "ssh -p ${SSH_PORT}" \
-          deploy_artifact/ \
-          "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
-
+            --exclude=".env" \
+            --exclude="logs/" \
+            -e "ssh -p ${SSH_PORT}" \
+            deploy_artifact/ \
+            "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
 
       - name: Install production dependencies on server
         run: |
-
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            set -euo pipefail
+            set -e
             cd "${APP_DIR}"
 
-            # GARANTE instalação limpa (obrigatório para npm ci)
             rm -rf node_modules
-
-            node -v
-            npm -v
-            
             npm install --omit=dev --no-audit --no-fund
           EOF
-        
-      - name: Run Prisma migrations on server
+
+      - name: Run Prisma migrations
         run: |
-          set -euo pipefail
-
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            set -euo pipefail
             cd "${APP_DIR}"
-
-            if [ -f .env ]; then
-              export \$(grep -v '^#' .env | xargs)
-            else
-              echo "ERROR: .env not found"
-              exit 1
-            fi
-
+            export \$(grep -v '^#' .env | xargs)
             npx prisma migrate deploy
           EOF
-      
-      - name: Setup Python service on server
+
+      - name: Restart backend services
         run: |
-          set -euo pipefail
-
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            set -euo pipefail
             cd "${APP_DIR}"
-
-            if [ -d "python-service" ]; then
-              echo "Setting up Python service..."
-
-              # Garante python3
-              command -v python3 >/dev/null 2>&1 || sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip
-
-              # Cria venv se não existir
-              if [ ! -f "python-service/venv/bin/python" ]; then
-                python3 -m venv python-service/venv
-              fi
-
-              # Instala dependências
-              ./python-service/venv/bin/pip install --upgrade pip
-              ./python-service/venv/bin/pip install -r python-service/requirements.txt
-            else
-              echo "No python-service directory, skipping"
-            fi
-          EOF
-
-
-      - name: Restart backend services with PM2
-        run: |
-          set -euo pipefail
-
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            set -euo pipefail
-            cd "${APP_DIR}"
-
-            # Garante PM2 disponível
-            command -v pm2 >/dev/null 2>&1 || npm install -g pm2
-
-            # Reinício controlado
-
-            # Backend (NestJS)
-            pm2 describe "${PM2_APP}" >/dev/null 2>&1 && pm2 reload ecosystem.config.js --env development || pm2 start ecosystem.config.js --env development
-
-            # Python service
-            pm2 describe "${PM2_PY_APP}" >/dev/null 2>&1 && pm2 restart "${PM2_PY_APP}" || true
-
-            # Start se não existir
-            if ! pm2 describe "${PM2_APP}" >/dev/null 2>&1; then
-              if [ -f ecosystem.config.js ]; then
-                pm2 start ecosystem.config.js
-              else
-                pm2 start dist/main.js --name "${PM2_APP}"
-              fi
-            fi
-
+            pm2 reload ecosystem.config.js --env development
             pm2 save
           EOF
