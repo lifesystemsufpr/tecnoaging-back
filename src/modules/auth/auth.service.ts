@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AccessToken, JwtPayload, Payload } from './interfaces/auth.interface';
 import { User } from '@prisma/client';
@@ -30,15 +35,27 @@ export class AuthService {
           cpf: true,
           role: true,
           password: true,
+          active: true,
         },
       });
+
+      if (user && user.active === false) {
+        throw new ForbiddenException(
+          'Sua conta está desativada. Entre em contato com o suporte para reativá-la.',
+        );
+      }
 
       if (user && (await comparePassword(password, user.password))) {
         const { password, ...result } = user;
         return result;
       }
+
       return null;
     } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw error;
+      }
+
       this.logger.error('Erro ao validar credenciais', error);
       return null;
     }
