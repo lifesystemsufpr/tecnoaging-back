@@ -13,6 +13,7 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import cookieParser = require('cookie-parser');
 import { NormalizationPipe } from './shared/pipes/normalization.pipe';
+import { HttpAdapterHost } from '@nestjs/core';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,7 +31,9 @@ async function bootstrap() {
     new NormalizationPipe(),
   );
 
-  app.useGlobalFilters(new PrismaClientExceptionFilter());
+  const { httpAdapter } = app.get(HttpAdapterHost);
+
+  app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
 
   // enable shutdown hook
   app.enableShutdownHooks();
