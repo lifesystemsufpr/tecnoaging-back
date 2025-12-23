@@ -138,11 +138,13 @@ jobs:
 
       - name: Install production dependencies on server
         run: |
-          set -euo pipefail
 
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -euo pipefail
             cd "${APP_DIR}"
+
+            # GARANTE instalação limpa (obrigatório para npm ci)
+            rm -rf node_modules
 
             node -v
             npm -v
