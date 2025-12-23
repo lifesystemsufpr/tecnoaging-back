@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateInstitutionDto } from './dto/create-institution.dto';
 import { UpdateInstitutionDto } from './dto/update-institution.dto';
-import { PrismaService } from 'nestjs-prisma';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
 import { Prisma } from '@prisma/client';
 import { FindInstitutionsQueryDto } from './dto/find-institution-query.dto';

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { CreateHealthProfessionalDto } from './dto/create-health-professional.dto';
 import { UpdateHealthProfessionalDto } from './dto/update-health-professional.dto';
-import { PrismaService } from 'nestjs-prisma';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { UserService } from '../users/user.service';
 import { HealthProfessional, Prisma, SystemRole, User } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
