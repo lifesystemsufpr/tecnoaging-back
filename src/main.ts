@@ -9,8 +9,11 @@ import {
   NestConfig,
   SwaggerConfig,
 } from './shared/config/config.interface';
-import { PrismaClientExceptionFilter } from './shared/filters/prisma-client-exception.filter';
-import * as cookieParser from 'cookie-parser';
+import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-client-exception.filter';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import cookieParser = require('cookie-parser');
+import { NormalizationPipe } from './shared/pipes/normalization.pipe';
+import { HttpAdapterHost } from '@nestjs/core';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -23,9 +26,14 @@ async function bootstrap() {
   logger.log('Starting application...');
 
   // Validation
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, transform: true }),
+    new NormalizationPipe(),
+  );
 
-  app.useGlobalFilters(new PrismaClientExceptionFilter());
+  const { httpAdapter } = app.get(HttpAdapterHost);
+
+  app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
 
   // enable shutdown hook
   app.enableShutdownHooks();
@@ -78,10 +86,13 @@ async function bootstrap() {
 
   const port = Number(nestConfig.port) || 3333;
   await app.listen(port, '127.0.0.1');
-  
-  logger.log(    
+
+  logger.log(
     `[${nestConfig.environment}] Application is running on: ${await app.getUrl()}`,
   );
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Error starting application:', err);
+  process.exit(1);
+});
