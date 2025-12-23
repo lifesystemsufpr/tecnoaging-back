@@ -148,8 +148,8 @@ jobs:
 
             node -v
             npm -v
-
-            npm ci --omit=dev
+            
+            npm install --omit=dev --no-audit --no-fund
           EOF
         
       - name: Run Prisma migrations on server
