@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { InstitutionService } from './institution.service';
 import { CreateInstitutionDto } from './dto/create-institution.dto';
@@ -13,6 +14,7 @@ import { UpdateInstitutionDto } from './dto/update-institution.dto';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
+import { FindInstitutionsQueryDto } from './dto/find-institution-query.dto';
 
 @Controller('institution')
 @ApiBearerAuth()
@@ -26,8 +28,8 @@ export class InstitutionController {
   }
 
   @Get()
-  findAll() {
-    return this.institutionService.findAll();
+  findAll(@Query() query: FindInstitutionsQueryDto) {
+    return this.institutionService.findAll(query);
   }
 
   @Get(':id')
