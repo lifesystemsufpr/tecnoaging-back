@@ -1,11 +1,6 @@
-import { Logger, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import appConfig from './shared/config/app.config';
-import {
-  loggingMiddleware,
-  PrismaModule,
-  providePrismaClientExceptionFilter,
-} from 'nestjs-prisma';
 import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserService } from './modules/users/user.service';
@@ -17,9 +12,11 @@ import { EvaluationModule } from './modules/evaluation/evaluation.module';
 import { HealthUnitModule } from './modules/health-unit/health-unit.module';
 import { InstitutionModule } from './modules/institution/institution.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
-import { appPrismaServiceOptions } from './shared/config/prisma-service-options';
 import { ParticipantModule } from './modules/participant/participant.module';
 import { QuestionnairesModule } from './modules/questionnaire/questionnaire.module';
+import { PrismaModule } from './shared/prisma/prisma.module';
+import { APP_FILTER } from '@nestjs/core';
+import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-client-exception.filter';
 
 @Module({
   imports: [
@@ -29,12 +26,7 @@ import { QuestionnairesModule } from './modules/questionnaire/questionnaire.modu
       envFilePath: ['.env.local', '.env'],
       load: [appConfig],
     }),
-
-    PrismaModule.forRoot({
-      isGlobal: true,
-      prismaServiceOptions: appPrismaServiceOptions,
-    }),
-
+    PrismaModule,
     SharedModule,
     AuthModule,
     UserModule,
@@ -48,9 +40,12 @@ import { QuestionnairesModule } from './modules/questionnaire/questionnaire.modu
     QuestionnairesModule,
   ],
   providers: [
-    providePrismaClientExceptionFilter(),
     ...provideGlobalAppGuards(),
     UserService,
+    {
+      provide: APP_FILTER,
+      useClass: PrismaClientExceptionFilter,
+    },
   ],
 })
 export class AppModule {}

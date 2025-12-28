@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateHealthUnitDto } from './dto/create-health-unit.dto';
 import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
-import { PrismaService } from 'nestjs-prisma';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { normalizeString } from 'src/shared/functions/normalize-string';
 

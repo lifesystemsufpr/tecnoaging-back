@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { CreateResearcherDto } from './dto/create-researcher.dto';
 import { UpdateResearcherDto } from './dto/update-researcher.dto';
-import { PrismaService } from 'nestjs-prisma';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { UserService } from '../users/user.service';
 import {
   Institution,

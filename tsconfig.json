@@ -16,9 +16,14 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
   },
+  "include": ["src/**/*"],
   "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*spec.ts",
     "src/**/*_OLD/**/*",
     "sequelize_backup/**/*"
   ]

@@ -1,6 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
-import { PrismaService } from 'nestjs-prisma';
 import {
   Evaluation,
   HealthcareUnit,
@@ -15,6 +14,7 @@ import { normalizeString as normalize } from 'src/shared/functions/normalize-str
 import { HttpService } from '@nestjs/axios';
 import { isAxiosError } from 'axios';
 import { lastValueFrom } from 'rxjs';
+import { PrismaService } from 'src/shared/prisma/prisma.service';
 
 type EvaluationWithDetails = Evaluation & {
   participant: Participant & { user: User };
