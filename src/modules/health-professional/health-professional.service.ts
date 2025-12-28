@@ -174,4 +174,17 @@ export class HealthProfessionalService extends BaseService<
       return healthProfessional;
     });
   }
+
+  async reactivate(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const healthProfessional = await tx.healthProfessional.update({
+        where: { id },
+        data: { active: true },
+      });
+
+      await this.userService.update(id, { active: true }, tx);
+
+      return healthProfessional;
+    });
+  }
 }

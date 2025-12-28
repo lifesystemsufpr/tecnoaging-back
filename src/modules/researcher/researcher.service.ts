@@ -170,4 +170,17 @@ export class ResearcherService extends BaseService<
       return researcher;
     });
   }
+
+  async reactivate(id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const researcher = await tx.researcher.update({
+        where: { id },
+        data: { active: true },
+      });
+
+      await this.userService.update(id, { active: true }, tx);
+
+      return researcher;
+    });
+  }
 }
