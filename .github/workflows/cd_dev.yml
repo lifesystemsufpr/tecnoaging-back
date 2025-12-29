@@ -46,7 +46,7 @@ jobs:
         run: | 
                npx prisma generate
                npm run build
-               EOF
+               
                
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
