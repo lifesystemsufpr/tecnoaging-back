@@ -21,6 +21,7 @@ jobs:
       SSH_HOST: ${{ secrets.DEVENV_SSH_HOST }}
       SSH_USER: ${{ secrets.DEVENV_SSH_USER }}
       SSH_PORT: ${{ secrets.DEVENV_SSH_PORT }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL}}
 
       APP_DIR: /opt/tecnoaging/back
 
