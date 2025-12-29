@@ -94,10 +94,11 @@ jobs:
       - name: Run Prisma migrations
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            set -e
             cd "${APP_DIR}"
-            export \$(grep -v '^#' .env | xargs)
-            npx prisma migrate deploy
+            DATABASE_URL="${DATABASE_URL}" npx prisma migrate deploy
           EOF
+
 
       - name: Restart backend services
         run: |
