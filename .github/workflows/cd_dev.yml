@@ -97,8 +97,6 @@ jobs:
                 set -e
                 cd "${APP_DIR}"
                 export $(grep -v '^#' .env | xargs)
-                pwd
-                ls
                 npx prisma migrate deploy --schema=./prisma/schema.prisma
           EOF
 
