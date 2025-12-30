@@ -96,7 +96,6 @@ jobs:
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << 'EOF'
                 set -e
                 cd "${APP_DIR}"
-                ls
                 export $(grep -v '^#' .env | xargs)
                 npx prisma migrate deploy --schema=./prisma/schema.prisma
           EOF
