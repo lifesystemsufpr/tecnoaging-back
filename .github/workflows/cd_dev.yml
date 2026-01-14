@@ -62,11 +62,12 @@ jobs:
         run: |
           rm -rf deploy_artifact
           mkdir deploy_artifact
+          set -e
+          test -f prisma/schema.prisma
+          cp -r prisma deploy_artifact/
 
           cp -r dist deploy_artifact/
           cp package.json package-lock.json deploy_artifact/
-
-          [ -d prisma ] && cp -r prisma deploy_artifact/
           [ -f ecosystem.config.js ] && cp ecosystem.config.js deploy_artifact/
           [ -d python-service ] && cp -r python-service deploy_artifact/
 
@@ -97,7 +98,7 @@ jobs:
                 set -e
                 cd "${APP_DIR}"
                 export $(grep -v '^#' .env | xargs)
-                npx prisma migrate deploy --schema=./prisma/schema.prisma
+                npx prisma migrate deploy
           EOF
 
       - name: Restart backend services
