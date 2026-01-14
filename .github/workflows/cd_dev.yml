@@ -92,16 +92,17 @@ jobs:
             npm install --omit=dev --no-audit --no-fund
           EOF
 
-
       - name: Run Prisma migrations
         run: |
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}"\
-          DATABASE_URL="${DATABASE_URL}"
-          << EOF
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" <<EOF
             set -e
             cd /opt/tecnoaging/back
+            set -a
+            source .env
+            set +a
             npx prisma migrate deploy
           EOF
+
 
       - name: Restart backend services
         run: |
