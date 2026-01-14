@@ -104,12 +104,12 @@ jobs:
       - name: Run Prisma migrations
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            set -e
-            cd "${APP_DIR}"
-            # Garante que o schema existe no servidor
-            test -f prisma/schema.prisma
-            npx prisma migrate deploy
-          EOF
+              set -e
+              cd "${APP_DIR}"
+              export DATABASE_URL="${DATABASE_URL}"
+              npx prisma migrate deploy
+            EOF
+
       
 
       - name: Restart backend services
