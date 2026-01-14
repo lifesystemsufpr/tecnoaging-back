@@ -95,7 +95,9 @@ jobs:
 
       - name: Run Prisma migrations
         run: |
-          ssh -p "${SSH_PORT}" \ DATABASE_URL="${DATABASE_URL}" \ "${SSH_USER}@${SSH_HOST}" <<'EOF'
+          ssh -p "${SSH_PORT}" \ 
+            DATABASE_URL="${DATABASE_URL}" \ 
+            "${SSH_USER}@${SSH_HOST}" <<'EOF'
             set -e
             cd /opt/tecnoaging/back
             npx prisma migrate deploy
