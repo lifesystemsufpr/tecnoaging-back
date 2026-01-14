@@ -93,15 +93,6 @@ jobs:
           EOF
 
 
-      - name: Debug server filesystem
-        run: |
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" <<'EOF'
-            ls -la /opt/tecnoaging/back
-            ls -la /opt/tecnoaging/back/prisma || echo "❌ prisma missing"
-            EOF
-
-
-
       - name: Run Prisma migrations
         run: |
             ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
