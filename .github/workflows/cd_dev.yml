@@ -95,7 +95,7 @@ jobs:
 
       - name: Run Prisma migrations
         run: |
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" <<'EOF'
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
             cd /opt/tecnoaging/back
             export DATABASE_URL="${DATABASE_URL}
