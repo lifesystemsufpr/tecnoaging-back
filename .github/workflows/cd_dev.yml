@@ -98,7 +98,7 @@ jobs:
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
             cd /opt/tecnoaging/back
-            export DATABASE_URL="${DATABASE_URL}
+            export DATABASE_URL="${DATABASE_URL}"
             npx prisma migrate deploy
           EOF
 
