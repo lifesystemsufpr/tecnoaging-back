@@ -98,12 +98,12 @@ jobs:
             ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << 'EOF'
               ls -la /opt/tecnoaging/back
               ls -la /opt/tecnoaging/back/prisma || echo "❌ prisma missing"
-            EOF
+             EOF
 
 
       - name: Run Prisma migrations
         run: |
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
               set -e
               cd "${APP_DIR}"
               export DATABASE_URL="${DATABASE_URL}"
