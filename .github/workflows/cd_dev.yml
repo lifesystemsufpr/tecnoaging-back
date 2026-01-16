@@ -43,11 +43,13 @@ jobs:
       - name: Install dependencies (CI)
         run: npm ci
 
-      # Necessário para o TypeScript reconhecer models (NÃO usa banco)
+      # Prisma Client é necessário para o build (usa DATABASE_URL fake)
       - name: Generate Prisma Client (CI)
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_db
         run: npx prisma generate
 
-      # Compilação do NestJS
+      # Build do NestJS
       - name: Build backend
         run: npm run build
 
@@ -74,7 +76,7 @@ jobs:
           # Código compilado
           cp -r dist deploy_artifact/
 
-          # Prisma schema (necessário para generate/migrate no servidor)
+          # Prisma schema (necessário no servidor)
           cp -r prisma deploy_artifact/
 
           # Manifestos de dependência
@@ -100,11 +102,11 @@ jobs:
             set -e
             cd "${APP_DIR}"
 
-            # Runtime limpo e previsível
+            # Runtime limpo
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
 
-            # Carregar variáveis de ambiente reais
+            # Carrega variáveis reais do servidor
             export \$(grep -v '^#' .env | xargs)
 
             # Prisma no ambiente correto
