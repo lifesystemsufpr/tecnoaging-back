@@ -134,10 +134,10 @@ jobs:
 
             # 4. Prisma
             echo "Gerando Prisma Client..."
-            npx prisma generate
+            npx prisma generate --config prisma.config.ts
             
             echo "Executando Migrations..."
-            npx prisma migrate deploy
+            npx prisma migrate deploy --config prisma.config.ts
           EOF
 
       - name: Restart backend services
