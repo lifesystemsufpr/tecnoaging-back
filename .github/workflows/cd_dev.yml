@@ -106,24 +106,33 @@ jobs:
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
 
-            # 2. Carrega variáveis reais do servidor (CORREÇÃO)
+            # 2. Carrega variáveis e LIMPA caracteres do Windows (FIX)
             if [ -f .env ]; then
-              echo "Carregando variáveis do .env..."
-              set -a      # Marca todas as variáveis seguintes para exportação
-              source .env # Lê o arquivo
-              set +a      # Para a exportação automática
+              echo "Sanitizando e carregando .env..."
+              # Remove caracteres \r (Carriage Return) que quebram o Linux
+              sed -i 's/\r$//' .env
+              
+              set -a
+              source .env
+              set +a
             else
-              echo "❌ ERRO: Arquivo .env não encontrado no diretório ${APP_DIR}"
+              echo "❌ ERRO: Arquivo .env não encontrado!"
               exit 1
             fi
 
-            # 3. Verificação de segurança (Opcional, mas recomendado)
-            if [ -z "\$DATABASE_URL" ]; then
-              echo "❌ ERRO: DATABASE_URL não foi definida. Verifique o arquivo .env."
+            # 3. DEBUG: Verifica se o Linux realmente leu a variável
+            # Mostra apenas os primeiros 10 caracteres por segurança
+            if [ -n "\$DATABASE_URL" ]; then
+              echo "✅ DATABASE_URL carregada: \${DATABASE_URL:0:10}..."
+            else
+              echo "❌ ERRO CRÍTICO: DATABASE_URL está vazia após o source!"
+              # Lista o conteúdo do .env (sem valores) para ver se as chaves estão lá
+              echo "Conteúdo das chaves no .env:"
+              cut -d '=' -f1 .env
               exit 1
             fi
 
-            # 4. Prisma 7 (Generate deve vir antes do migrate)
+            # 4. Prisma
             echo "Gerando Prisma Client..."
             npx prisma generate
             
