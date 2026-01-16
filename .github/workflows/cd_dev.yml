@@ -27,7 +27,7 @@ jobs:
 
     steps:
       # ─────────────────────────────────────
-      # CI STAGE
+      # CI STAGE (COMPILAÇÃO)
       # ─────────────────────────────────────
 
       - name: Checkout repository
@@ -39,16 +39,20 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      # Runner descartável → npm ci
+      # Runner descartável → instalação determinística
       - name: Install dependencies (CI)
         run: npm ci
 
-      # Apenas build (sem Prisma, sem banco)
+      # Necessário para o TypeScript reconhecer models (NÃO usa banco)
+      - name: Generate Prisma Client (CI)
+        run: npx prisma generate
+
+      # Compilação do NestJS
       - name: Build backend
         run: npm run build
 
       # ─────────────────────────────────────
-      # DEPLOY STAGE
+      # DEPLOY STAGE (SERVIDOR)
       # ─────────────────────────────────────
 
       - name: Start SSH agent
@@ -67,13 +71,13 @@ jobs:
           rm -rf deploy_artifact
           mkdir deploy_artifact
 
-          # Build output
+          # Código compilado
           cp -r dist deploy_artifact/
 
-          # Prisma schema
+          # Prisma schema (necessário para generate/migrate no servidor)
           cp -r prisma deploy_artifact/
 
-          # Package manifests
+          # Manifestos de dependência
           cp package.json package-lock.json deploy_artifact/
 
           # PM2 config (se existir)
@@ -96,11 +100,11 @@ jobs:
             set -e
             cd "${APP_DIR}"
 
-            # Instala somente dependências de produção
+            # Runtime limpo e previsível
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
 
-            # Garante variáveis de ambiente
+            # Carregar variáveis de ambiente reais
             export \$(grep -v '^#' .env | xargs)
 
             # Prisma no ambiente correto
