@@ -79,6 +79,9 @@ jobs:
           # Prisma schema (necessário no servidor)
           cp -r prisma deploy_artifact/
 
+          # Prisma Config (necessário para o prisma)
+          cp prisma.config.ts deploy_artifact/
+          
           # Manifestos de dependência
           cp package.json package-lock.json deploy_artifact/
 
