@@ -102,15 +102,32 @@ jobs:
             set -e
             cd "${APP_DIR}"
 
-            # Runtime limpo
+            # 1. Runtime limpo
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
 
-            # Carrega variáveis reais do servidor
-            export \$(grep -v '^#' .env | xargs)
+            # 2. Carrega variáveis reais do servidor (CORREÇÃO)
+            if [ -f .env ]; then
+              echo "Carregando variáveis do .env..."
+              set -a      # Marca todas as variáveis seguintes para exportação
+              source .env # Lê o arquivo
+              set +a      # Para a exportação automática
+            else
+              echo "❌ ERRO: Arquivo .env não encontrado no diretório ${APP_DIR}"
+              exit 1
+            fi
 
-            # Prisma no ambiente correto
+            # 3. Verificação de segurança (Opcional, mas recomendado)
+            if [ -z "\$DATABASE_URL" ]; then
+              echo "❌ ERRO: DATABASE_URL não foi definida. Verifique o arquivo .env."
+              exit 1
+            fi
+
+            # 4. Prisma 7 (Generate deve vir antes do migrate)
+            echo "Gerando Prisma Client..."
             npx prisma generate
+            
+            echo "Executando Migrations..."
             npx prisma migrate deploy
           EOF
 
