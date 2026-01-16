@@ -64,6 +64,9 @@ jobs:
       - name: Install Dependencies (Runner)
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Build Application (Runner)
         run: npm run build
 
@@ -166,17 +169,22 @@ jobs:
             exit 1
           fi
 
-          # Install production dependencies for Node
+          # Install dependencies for Node (need Prisma CLI for migrations)
           if command -v npm >/dev/null 2>&1; then
-            npm ci --production
+            # Install all dependencies (including dev) to have Prisma CLI available
+            npm ci
           else
             echo "npm não encontrado"; exit 1
           fi
 
-          # Run DB migrations
+          # Generate Prisma Client and run migrations
           if [ -d "prisma" ]; then
+             npx prisma generate
              npx prisma migrate deploy
           fi
+
+          # Install only production dependencies after migrations
+          npm ci --production
 
           command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 

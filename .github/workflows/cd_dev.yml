@@ -82,23 +82,23 @@ jobs:
             deploy_artifact/ \
             "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
 
-      - name: Install production dependencies on server
+      - name: Install dependencies and run migrations on server
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
             cd "${APP_DIR}"
 
+            # Install all dependencies (including dev) to have Prisma CLI available
+            rm -rf node_modules
+            npm install --no-audit --no-fund
+
+            # Generate Prisma Client and run migrations
+            npx prisma generate
+            npx prisma migrate deploy
+
+            # Install only production dependencies after migrations
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
-          EOF
-
-      - name: Run Prisma migrations
-        run: |
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" <<EOF
-            set -e
-            cd /opt/tecnoaging/back
-
-            npx prisma migrate deploy
           EOF
 
 
