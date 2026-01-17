@@ -17,7 +17,7 @@ import { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiBody } from '@nestjs/swagger';
 
-@Controller('auth')
+@Controller('backend/auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
