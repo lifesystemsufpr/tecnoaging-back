@@ -137,16 +137,23 @@ jobs:
 
             # 4. Prisma
             echo "Gerando Prisma Client..."
-            npx prisma generate --config prisma.config.ts
+            #npx prisma generate --config prisma.config.ts
+            npx prisma generate --config prisma.config.ts --schema=prisma/schema.prisma
             
             echo "Executando Migrations..."
-            npx prisma migrate deploy --config prisma.config.ts
+            #npx prisma migrate deploy --config prisma.config.ts
+            npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
           EOF
 
       - name: Restart backend services
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             cd "${APP_DIR}"
-            pm2 reload ecosystem.config.js --env development
-            pm2 save
+            if [ -f ecosystem.config.js ]; then
+              pm2 reload ecosystem.config.js --env development
+              pm2 save
+            else
+              echo "❌ ecosystem.config.js não encontrado"
+              exit 1
+            fi
           EOF
