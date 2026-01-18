@@ -27,6 +27,8 @@ export class AuthService {
     password: string,
   ): Promise<Partial<User> | null> {
     try {
+      const dbUrl = process.env.DATABASE_URL || 'NÃO DEFINIDA';
+
       const user = await this.prisma.user.findFirst({
         where: { cpf },
         select: {
@@ -39,25 +41,48 @@ export class AuthService {
         },
       });
 
-      if (user && user.active === false) {
-        throw new ForbiddenException(
-          'Sua conta está desativada. Entre em contato com o suporte para reativá-la.',
-        );
+      if (!user) {
+        throw new UnauthorizedException({
+          debug_error: 'USUÁRIO_NAO_ENCONTRADO',
+          message: `O CPF ${cpf} não retornou nenhum registro.`,
+          server_env: process.env.NODE_ENV,
+          db_check: dbUrl.split('@')[1] || 'Url mal formatada ou local',
+        });
       }
 
-      if (user && (await comparePassword(password, user.password))) {
-        const { password, ...result } = user;
-        return result;
+      if (user.active === false) {
+        throw new ForbiddenException({
+          debug_error: 'USUARIO_INATIVO',
+          message: 'Conta desativada',
+        });
       }
 
-      return null;
+      const isPasswordValid = await comparePassword(password, user.password);
+
+      if (!isPasswordValid) {
+        throw new UnauthorizedException({
+          debug_error: 'SENHA_INCORRETA',
+          message: 'O hash não bateu.',
+          stored_hash_prefix: user.password.substring(0, 10),
+          received_password_len: password.length,
+        });
+      }
+
+      const { password: _, ...result } = user;
+      return result;
     } catch (error) {
-      if (error instanceof ForbiddenException) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ForbiddenException
+      ) {
         throw error;
       }
 
-      this.logger.error('Erro ao validar credenciais', error);
-      return null;
+      throw new UnauthorizedException({
+        debug_error: 'ERRO_TECNICO_UNCAUGHT',
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : null,
+      });
     }
   }
 
