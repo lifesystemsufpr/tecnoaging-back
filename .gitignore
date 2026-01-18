@@ -298,7 +298,9 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
-.prisma
+# Prisma generated (clarity only)
+node_modules/.prisma/
+node_modules/@prisma/client/
 
 # Typescript v1 declaration files
 typings/
