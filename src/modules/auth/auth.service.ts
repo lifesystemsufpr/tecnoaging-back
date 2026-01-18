@@ -28,6 +28,7 @@ export class AuthService {
   ): Promise<Partial<User> | null> {
     try {
       const dbUrl = process.env.DATABASE_URL || 'NÃO DEFINIDA';
+      console.log('[DEBUG DATABASE_URL]', process.env.DATABASE_URL, dbUrl);
 
       const user = await this.prisma.user.findFirst({
         where: { cpf },
