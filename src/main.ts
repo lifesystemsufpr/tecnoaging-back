@@ -17,7 +17,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('backend');
   const logger = new Logger('AppInitializer');
 
   app.use(json({ limit: '50mb' }));
