@@ -81,6 +81,9 @@ jobs:
 
           # Prisma Config (necessário para o prisma)
           cp prisma.config.ts deploy_artifact/
+
+          # Python Service
+          cp -r python-service deploy_artifact/
           
           # Manifestos de dependência
           cp package.json package-lock.json deploy_artifact/
