@@ -7,6 +7,10 @@ import {
   Participant,
   Prisma,
   User,
+  SensorData,
+  EvaluationIndicators,
+  EvaluationCycle,
+  PrismaClient,
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
@@ -15,6 +19,8 @@ import { HttpService } from '@nestjs/axios';
 import { isAxiosError } from 'axios';
 import { lastValueFrom } from 'rxjs';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
+
+// --- TIPAGENS AUXILIARES ---
 
 type EvaluationWithDetails = Evaluation & {
   participant: Participant & { user: User };
@@ -42,6 +48,13 @@ interface PythonCycleDetail {
   'Potência média ciclo (J/s)': number;
   'Vel. extensão levantar (°/s)': number;
   'Vel. flexão sentar (°/s)': number;
+  'Valor Pico 1 (°)': number;
+  'Valor Pico 2 (°)': number;
+}
+
+export interface ProcessedPoint {
+  t: number;
+  val: number;
 }
 
 interface PythonResponse {
@@ -54,10 +67,7 @@ interface PythonResponse {
     classificacao: string;
   };
   detalhes_ciclos: PythonCycleDetail[];
-  timeseries_processada: {
-    t: number;
-    val: number;
-  }[];
+  timeseries_processada: ProcessedPoint[];
 }
 
 type EvaluationQueryResult = Omit<
@@ -74,6 +84,13 @@ type EvaluationQueryResult = Omit<
   > & {
     user: Pick<User, 'fullName' | 'cpf'>;
   };
+};
+
+type DetailedEvaluation = Evaluation & {
+  sensorData: SensorData[];
+  indicators: EvaluationIndicators | null;
+  cycles: EvaluationCycle[];
+  participant: { birthday: Date };
 };
 
 interface SensorStat {
@@ -196,7 +213,7 @@ export class EvaluationService extends BaseService<
       sex: string;
     },
   ) {
-    const rawData = await this.prisma.sensorData.findMany({
+    const rawData: SensorData[] = await this.prisma.sensorData.findMany({
       where: {
         evaluationId: evaluationId,
         filtered: false,
@@ -236,15 +253,54 @@ export class EvaluationService extends BaseService<
         ),
       );
 
-      await this.prisma.evaluationIndicators.create({
-        data: {
-          evaluationId: evaluationId,
-          repetitionCount: result.metricas_globais.repeticoes,
-          meanPower: result.metricas_globais.potencia_media_global,
-          totalEnergy: result.metricas_globais.energia_total,
-          classification: result.metricas_globais.classificacao,
-        },
+      await this.prisma.$transaction(async (txArgument) => {
+        const tx = txArgument as PrismaClient;
+
+        const processedCurveJson =
+          result.timeseries_processada as unknown as Prisma.InputJsonValue;
+
+        await tx.evaluationIndicators.upsert({
+          where: { evaluationId },
+          update: {
+            repetitionCount: result.metricas_globais.repeticoes,
+            meanPower: result.metricas_globais.potencia_media_global,
+            totalEnergy: result.metricas_globais.energia_total,
+            classification: result.metricas_globais.classificacao,
+            processedCurve: processedCurveJson,
+          },
+          create: {
+            evaluationId,
+            repetitionCount: result.metricas_globais.repeticoes,
+            meanPower: result.metricas_globais.potencia_media_global,
+            totalEnergy: result.metricas_globais.energia_total,
+            classification: result.metricas_globais.classificacao,
+            processedCurve: processedCurveJson,
+          },
+        });
+
+        await tx.evaluationCycle.deleteMany({
+          where: { evaluationId },
+        });
+
+        if (result.detalhes_ciclos && result.detalhes_ciclos.length > 0) {
+          await tx.evaluationCycle.createMany({
+            data: result.detalhes_ciclos.map((c) => ({
+              evaluationId,
+              cycleNumber: c.Ciclo,
+              totalTime: c['Tempo total (s)'],
+              standUpTime: c['Tempo levantar (s)'],
+              sitDownTime: c['Tempo sentar (s)'],
+              frequency: c['Frequência (Hz)'],
+              meanPower: c['Potência média ciclo (J/s)'],
+              extensionVel: c['Vel. extensão levantar (°/s)'],
+              flexionVel: c['Vel. flexão sentar (°/s)'],
+              peak1Val: c['Valor Pico 1 (°)'],
+              peak2Val: c['Valor Pico 2 (°)'],
+            })),
+          });
+        }
       });
+
       return result.metricas_globais;
     } catch (error: unknown) {
       this.logger.error(
@@ -271,7 +327,7 @@ export class EvaluationService extends BaseService<
   }
 
   async findOneDetailed(id: string) {
-    const evaluation = await this.prisma.evaluation.findUnique({
+    const evaluationRaw = await this.prisma.evaluation.findUnique({
       where: { id },
       include: {
         sensorData: {
@@ -279,13 +335,18 @@ export class EvaluationService extends BaseService<
           orderBy: { timestamp: 'asc' },
         },
         indicators: true,
+        cycles: {
+          orderBy: { cycleNumber: 'asc' },
+        },
         participant: {
           select: { birthday: true },
         },
       },
     });
 
-    if (!evaluation) throw new NotFoundException('Evaluation not found');
+    if (!evaluationRaw) throw new NotFoundException('Evaluation not found');
+
+    const evaluation = evaluationRaw as unknown as DetailedEvaluation;
 
     const initialStats: SensorStatsMap = {
       ax: { min: Infinity, max: -Infinity, sum: 0 },
@@ -354,6 +415,10 @@ export class EvaluationService extends BaseService<
       evaluation.date,
     );
 
+    const processedData =
+      (evaluation.indicators?.processedCurve as unknown as ProcessedPoint[]) ||
+      [];
+
     const derivedBlock = {
       participantAgeOnEvaluation: participantAge,
       indicators: evaluation.indicators
@@ -369,22 +434,39 @@ export class EvaluationService extends BaseService<
               value: evaluation.indicators.meanPower,
               maxValue: 500,
               classification: '',
+              unit: 'W',
             },
             {
               name: 'Total Energy',
               value: evaluation.indicators.totalEnergy,
               maxValue: 10000,
               classification: '',
+              unit: 'J',
             },
           ]
         : [],
       overallClassification: evaluation.indicators?.classification || 'N/A',
     };
 
+    const cyclesList: EvaluationCycle[] = evaluation.cycles || [];
+
     return {
       sensor: sensorBlock,
+      processed: {
+        data: processedData,
+        label: 'Ângulo do Tronco',
+        unit: '°',
+      },
       derived: derivedBlock,
-      cycles: null,
+      cycles: cyclesList.map((c) => ({
+        cycle: c.cycleNumber,
+        totalTime: c.totalTime,
+        standUpTime: c.standUpTime,
+        sitDownTime: c.sitDownTime,
+        power: c.meanPower,
+        velocityExtension: c.extensionVel,
+        velocityFlexion: c.flexionVel,
+      })),
     };
   }
 
@@ -583,7 +665,9 @@ export class EvaluationService extends BaseService<
   }
 
   async remove(id: string) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (txArgument) => {
+      const tx = txArgument as PrismaClient;
+
       await tx.sensorData.deleteMany({
         where: {
           evaluationId: id,

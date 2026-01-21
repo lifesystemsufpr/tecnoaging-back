@@ -7,23 +7,40 @@ import {
   IsEnum,
   IsUUID,
   IsDate,
+  IsNumber,
 } from 'class-validator';
-import { CreateSensorDataDto } from './create-sensor-data.dto';
 import { TypeEvaluation } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 
+// --- DTO Auxiliar para os dados do sensor ---
+export class CreateSensorDataDto {
+  @ApiProperty({
+    description: 'Timestamp da leitura do sensor',
+    example: '2025-09-01T10:30:00.000Z',
+  })
+  @IsDate()
+  @Type(() => Date)
+  @IsNotEmpty()
+  timestamp: Date;
+
+  @ApiProperty({ example: 0.123 }) @IsNumber() @IsNotEmpty() accel_x: number;
+  @ApiProperty({ example: -0.456 }) @IsNumber() @IsNotEmpty() accel_y: number;
+  @ApiProperty({ example: 0.656 }) @IsNumber() @IsNotEmpty() accel_z: number;
+  @ApiProperty({ example: 1.234 }) @IsNumber() @IsNotEmpty() gyro_x: number;
+  @ApiProperty({ example: -2.345 }) @IsNumber() @IsNotEmpty() gyro_y: number;
+  @ApiProperty({ example: 0.789 }) @IsNumber() @IsNotEmpty() gyro_z: number;
+}
+
+// --- Função de Transformação ---
 const transformEvaluationType = ({ value }: { value: string }) => {
-  if (value === '5TSTS') {
-    return 'FTSTS';
-  }
-  if (value === '30TSTS') {
-    return 'TTSTS';
-  }
+  if (value === '5TSTS') return 'FTSTS';
+  if (value === '30TSTS') return 'TTSTS';
   return value;
 };
 
+// --- DTO Principal de Criação ---
 export class CreateEvaluationDto {
-  @ApiProperty({ example: 'FTSTS' })
+  @ApiProperty({ example: 'FTSTS', enum: TypeEvaluation })
   @IsEnum(TypeEvaluation)
   @Transform(transformEvaluationType)
   @IsNotEmpty()
@@ -47,19 +64,19 @@ export class CreateEvaluationDto {
   @IsNotEmpty()
   time_end: Date;
 
-  @ApiProperty({ example: '9526690b-e2e4-42bb-bf14-7c4c92dd70e3' })
+  @ApiProperty({ example: 'uuid-do-participante' })
   @IsUUID()
   @IsString()
   @IsNotEmpty()
   participantId: string;
 
-  @ApiProperty({ example: '1633396f-e11f-4017-9caf-fef3538c15ac' })
+  @ApiProperty({ example: 'uuid-do-profissional' })
   @IsUUID()
   @IsString()
   @IsNotEmpty()
   healthProfessionalId: string;
 
-  @ApiProperty({ example: '6cd3a9bf-17fa-4850-a326-8355872fd6c2' })
+  @ApiProperty({ example: 'uuid-da-unidade' })
   @IsUUID()
   @IsString()
   @IsNotEmpty()
