@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateInstitutionDto } from './dto/create-institution.dto';
 import { UpdateInstitutionDto } from './dto/update-institution.dto';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
@@ -91,12 +91,22 @@ export class InstitutionService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-
-    return this.prisma.institution.update({
-      where: { id },
-      data: { active: false },
-    });
+    try {
+      return await this.prisma.institution.update({
+        where: { id },
+        data: { active: false },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          `Instituição com ID '${id}' não encontrada.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async reactivate(id: string) {

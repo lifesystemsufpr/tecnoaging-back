@@ -174,18 +174,31 @@ export class ParticipantService extends BaseService<
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const participant = await tx.participant.update({
+          where: { id },
+          data: { active: false },
+        });
 
-    return this.prisma.$transaction(async (tx) => {
-      const participant = await tx.participant.update({
-        where: { id },
-        data: { active: false },
+        await tx.user.update({
+          where: { id },
+          data: { active: false },
+        });
+
+        return participant;
       });
-
-      await this.userService.update(id, { active: false }, tx);
-
-      return participant;
-    });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          `Participante com ID '${id}' não encontrado.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async reactivate(id: string) {
