@@ -583,19 +583,29 @@ export class EvaluationService extends BaseService<
   }
 
   async remove(id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.sensorData.deleteMany({
-        where: {
-          evaluationId: id,
-        },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.sensorData.deleteMany({
+          where: {
+            evaluationId: id,
+          },
+        });
 
-      const deletedEvaluation = await tx.evaluation.delete({
-        where: { id },
-      });
+        const deletedEvaluation = await tx.evaluation.delete({
+          where: { id },
+        });
 
-      return deletedEvaluation;
-    });
+        return deletedEvaluation;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(`Avaliação com ID '${id}' não encontrada.`);
+      }
+      throw error;
+    }
   }
 
   private calculateAge(birthDate: Date, referenceDate: Date): number {

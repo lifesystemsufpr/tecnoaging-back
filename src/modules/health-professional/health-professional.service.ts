@@ -162,17 +162,28 @@ export class HealthProfessionalService extends BaseService<
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-    return this.prisma.$transaction(async (tx) => {
-      const healthProfessional = await tx.healthProfessional.update({
-        where: { id },
-        data: { active: false },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const healthProfessional = await tx.healthProfessional.update({
+          where: { id },
+          data: { active: false },
+        });
+
+        await this.userService.update(id, { active: false }, tx);
+
+        return healthProfessional;
       });
-
-      await this.userService.update(id, { active: false }, tx);
-
-      return healthProfessional;
-    });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          `Profissional de saúde com ID '${id}' não encontrado.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async reactivate(id: string) {
