@@ -133,12 +133,22 @@ export class HealthUnitService {
   }
 
   async remove(id: string) {
-    await this.findOne(id);
-
-    return await this.prisma.healthcareUnit.update({
-      where: { id },
-      data: { active: false },
-    });
+    try {
+      return await this.prisma.healthcareUnit.update({
+        where: { id },
+        data: { active: false },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException(
+          `Unidade de Saúde com o ID '${id}' não encontrada.`,
+        );
+      }
+      throw error;
+    }
   }
 
   async restore(id: string) {
