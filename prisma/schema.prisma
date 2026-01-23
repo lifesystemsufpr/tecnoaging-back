@@ -147,7 +147,7 @@ model Evaluation {
   participant        Participant           @relation(fields: [participantId], references: [id])
   sensorData         SensorData[]
   indicators         EvaluationIndicators?
-
+  cycles             EvaluationCycle[]
   @@index([participantId])
   @@index([healthProfessionalId])
   @@index([healthcareUnitId])
@@ -165,6 +165,8 @@ model EvaluationIndicators {
   totalEnergy     Float  @default(0.0)
   classification  String @default("")
 
+  processedCurve  Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -172,6 +174,32 @@ model EvaluationIndicators {
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
   @@map("evaluation_indicators")
+}
+
+model EvaluationCycle {
+  id              String     @id @default(uuid())
+  evaluationId    String
+  
+  cycleNumber     Int   
+  
+  totalTime       Float 
+  standUpTime     Float      
+  sitDownTime     Float      
+  
+  frequency       Float      // Hz
+  meanPower       Float      // J/s (Watts)
+  extensionVel    Float      // Degrees/s (Rising velocity)
+  flexionVel      Float      // Degrees/s (Sitting velocity)
+  
+  peak1Val        Float?     
+  peak2Val        Float?
+
+  createdAt       DateTime   @default(now())
+
+  evaluation      Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@map("evaluation_cycle")
 }
 
 model HealthcareUnit {
