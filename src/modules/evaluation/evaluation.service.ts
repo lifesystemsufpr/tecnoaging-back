@@ -666,18 +666,8 @@ export class EvaluationService extends BaseService<
 
   async remove(id: string) {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        await tx.sensorData.deleteMany({
-          where: {
-            evaluationId: id,
-          },
-        });
-
-        const deletedEvaluation = await tx.evaluation.delete({
-          where: { id },
-        });
-
-        return deletedEvaluation;
+      return await this.prisma.evaluation.delete({
+        where: { id },
       });
     } catch (error) {
       if (
@@ -689,7 +679,6 @@ export class EvaluationService extends BaseService<
       throw error;
     }
   }
-
   private calculateAge(birthDate: Date, referenceDate: Date): number {
     let age = referenceDate.getFullYear() - birthDate.getFullYear();
     const m = referenceDate.getMonth() - birthDate.getMonth();

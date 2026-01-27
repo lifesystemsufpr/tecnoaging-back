@@ -45,7 +45,7 @@ export class HealthUnitService {
         neighborhood
           ? { neighborhood: { contains: neighborhood, mode: 'insensitive' } }
           : {},
-        active !== undefined ? { active } : {},
+        active !== undefined ? { active } : { active: true },
         // Lógica de Data
         startDate || endDate
           ? {

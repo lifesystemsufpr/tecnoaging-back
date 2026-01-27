@@ -37,7 +37,7 @@ export class InstitutionService {
     const where: Prisma.InstitutionWhereInput = {
       AND: [
         title ? { title: { contains: title, mode: 'insensitive' } } : {},
-        active !== undefined ? { active } : {},
+        active !== undefined ? { active } : { active: true },
       ],
       OR: search
         ? [
