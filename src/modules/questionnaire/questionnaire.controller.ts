@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { QuestionnaireService } from './questionnaire.service';
 import { CreateResponseDto } from './dto/create-response.dto';
+import { FilterQuestionnaireResponseDto } from './dto/filter-questionnaire-response.dto';
 
 @Controller('questionnaires')
 export class QuestionnaireController {
@@ -9,6 +10,11 @@ export class QuestionnaireController {
   @Get('ivcf-20')
   getStructure() {
     return this.service.getIvcfStructure();
+  }
+
+  @Get()
+  findAll(@Query() query: FilterQuestionnaireResponseDto) {
+    return this.service.findAll(query);
   }
 
   @Post('response')
