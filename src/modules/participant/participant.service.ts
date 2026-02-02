@@ -174,20 +174,32 @@ export class ParticipantService extends BaseService<
   }
 
   async remove(id: string) {
+    const relationInfo = await this.checkDeletability(id);
+
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const participant = await tx.participant.update({
-          where: { id },
-          data: { active: false },
-        });
+      const deactivatedParticipant = await this.prisma.$transaction(
+        async (tx) => {
+          const participant = await tx.participant.update({
+            where: { id },
+            data: { active: false },
+            include: { user: true },
+          });
 
-        await tx.user.update({
-          where: { id },
-          data: { active: false },
-        });
+          await tx.user.update({
+            where: { id },
+            data: { active: false },
+          });
 
-        return participant;
-      });
+          return participant;
+        },
+      );
+
+      const responseData = this.transform(deactivatedParticipant);
+
+      return {
+        ...responseData,
+        hasRelations: relationInfo.hasRelations,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -212,5 +224,9 @@ export class ParticipantService extends BaseService<
 
       return participant;
     });
+  }
+
+  async checkDeletability(id: string) {
+    return await this.prisma.checkDeletionSafety('participant', id);
   }
 }

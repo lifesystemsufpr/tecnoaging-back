@@ -162,17 +162,30 @@ export class HealthProfessionalService extends BaseService<
   }
 
   async remove(id: string) {
+    const relationInfo = await this.checkDeletability(id);
+
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const healthProfessional = await tx.healthProfessional.update({
-          where: { id },
-          data: { active: false },
-        });
+      const deactivatedProfessional = await this.prisma.$transaction(
+        async (tx) => {
+          const healthProfessional = await tx.healthProfessional.update({
+            where: { id },
+            data: { active: false },
+            include: { user: true },
+          });
 
-        await this.userService.update(id, { active: false }, tx);
+          await this.userService.update(id, { active: false }, tx);
 
-        return healthProfessional;
-      });
+          return healthProfessional;
+        },
+      );
+
+      const responseData = this.transform(deactivatedProfessional);
+
+      return {
+        ...responseData,
+        hasRelations: relationInfo.hasRelations,
+        _relationsDetails: relationInfo._relationsDetails,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -197,5 +210,9 @@ export class HealthProfessionalService extends BaseService<
 
       return healthProfessional;
     });
+  }
+
+  async checkDeletability(id: string) {
+    return await this.prisma.checkDeletionSafety('healthProfessional', id);
   }
 }

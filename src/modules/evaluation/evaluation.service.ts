@@ -665,10 +665,24 @@ export class EvaluationService extends BaseService<
   }
 
   async remove(id: string) {
+    const relationInfo = await this.checkDeletability(id);
+
     try {
-      return await this.prisma.evaluation.delete({
+      const deletedEvaluation = await this.prisma.evaluation.delete({
         where: { id },
+        include: {
+          participant: { include: { user: true } },
+          healthProfessional: { include: { user: true } },
+          healthcareUnit: true,
+        },
       });
+
+      const formatted = this.transform(deletedEvaluation);
+
+      return {
+        ...formatted,
+        hasRelations: relationInfo.hasRelations,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -679,6 +693,11 @@ export class EvaluationService extends BaseService<
       throw error;
     }
   }
+
+  async checkDeletability(id: string) {
+    return await this.prisma.checkDeletionSafety('evaluation', id);
+  }
+
   private calculateAge(birthDate: Date, referenceDate: Date): number {
     let age = referenceDate.getFullYear() - birthDate.getFullYear();
     const m = referenceDate.getMonth() - birthDate.getMonth();

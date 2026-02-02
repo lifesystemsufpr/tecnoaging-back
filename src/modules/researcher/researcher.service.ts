@@ -157,17 +157,29 @@ export class ResearcherService extends BaseService<
   }
 
   async remove(id: string) {
+    const relationInfo = await this.checkDeletability(id);
+
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const researcher = await tx.researcher.update({
-          where: { id },
-          data: { active: false },
-        });
+      const deactivatedResearcher = await this.prisma.$transaction(
+        async (tx) => {
+          const researcher = await tx.researcher.update({
+            where: { id },
+            data: { active: false },
+            include: { user: true, institution: true },
+          });
 
-        await this.userService.update(id, { active: false }, tx);
+          await this.userService.update(id, { active: false }, tx);
 
-        return researcher;
-      });
+          return researcher;
+        },
+      );
+
+      const responseData = this.transform(deactivatedResearcher);
+
+      return {
+        ...responseData,
+        hasRelations: relationInfo.hasRelations,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -192,5 +204,9 @@ export class ResearcherService extends BaseService<
 
       return researcher;
     });
+  }
+
+  async checkDeletability(id: string) {
+    return await this.prisma.checkDeletionSafety('researcher', id);
   }
 }

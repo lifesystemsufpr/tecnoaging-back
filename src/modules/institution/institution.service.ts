@@ -91,11 +91,18 @@ export class InstitutionService {
   }
 
   async remove(id: string) {
+    const relationInfo = await this.checkDeletability(id);
+
     try {
-      return await this.prisma.institution.update({
+      const deactivatedInstitution = await this.prisma.institution.update({
         where: { id },
         data: { active: false },
       });
+
+      return {
+        ...deactivatedInstitution,
+        hasRelations: relationInfo.hasRelations,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -114,5 +121,9 @@ export class InstitutionService {
       where: { id },
       data: { active: true },
     });
+  }
+
+  async checkDeletability(id: string) {
+    return await this.prisma.checkDeletionSafety('institution', id);
   }
 }

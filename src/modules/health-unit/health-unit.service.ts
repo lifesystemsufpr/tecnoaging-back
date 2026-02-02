@@ -133,11 +133,18 @@ export class HealthUnitService {
   }
 
   async remove(id: string) {
+    const relationInfo = await this.checkDeletability(id);
+
     try {
-      return await this.prisma.healthcareUnit.update({
+      const deactivatedUnit = await this.prisma.healthcareUnit.update({
         where: { id },
         data: { active: false },
       });
+
+      return {
+        ...deactivatedUnit,
+        hasRelations: relationInfo.hasRelations,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -166,5 +173,9 @@ export class HealthUnitService {
       where: { id },
       data: { active: true },
     });
+  }
+
+  async checkDeletability(id: string) {
+    return await this.prisma.checkDeletionSafety('healthcareUnit', id);
   }
 }
