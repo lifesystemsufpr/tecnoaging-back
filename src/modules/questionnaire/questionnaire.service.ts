@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateResponseDto } from './dto/create-response.dto';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
+import { FilterQuestionnaireResponseDto } from './dto/filter-questionnaire-response.dto';
+import { Prisma } from '@prisma/client';
+import { normalizeString } from 'src/shared/functions/normalize-string';
 
 @Injectable()
 export class QuestionnaireService {
@@ -111,6 +114,203 @@ export class QuestionnaireService {
         },
       },
     });
+  }
+
+  async findAll(filters: FilterQuestionnaireResponseDto) {
+    const {
+      page = 1,
+      pageSize = 10,
+      search,
+      participantCpf,
+      participantName,
+      healthProfessionalCpf,
+      healthProfessionalName,
+      questionnaireSlug,
+      startDate,
+      endDate,
+    } = filters;
+
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    const conditions: Prisma.QuestionnaireResponseWhereInput[] = [];
+
+    if (participantCpf) {
+      conditions.push({
+        participant: {
+          user: {
+            cpf: { contains: participantCpf, mode: 'insensitive' },
+          },
+        },
+      });
+    }
+
+    if (participantName) {
+      conditions.push({
+        participant: {
+          user: {
+            fullName: { contains: participantName, mode: 'insensitive' },
+          },
+        },
+      });
+    }
+
+    if (healthProfessionalCpf) {
+      conditions.push({
+        healthProfessional: {
+          user: {
+            cpf: { contains: healthProfessionalCpf, mode: 'insensitive' },
+          },
+        },
+      });
+    }
+
+    if (healthProfessionalName) {
+      conditions.push({
+        healthProfessional: {
+          user: {
+            fullName: {
+              contains: healthProfessionalName,
+              mode: 'insensitive',
+            },
+          },
+        },
+      });
+    }
+
+    if (questionnaireSlug) {
+      conditions.push({
+        questionnaire: {
+          slug: questionnaireSlug,
+        },
+      });
+    }
+
+    if (startDate || endDate) {
+      const dateFilter: Prisma.DateTimeFilter = {};
+      if (startDate) dateFilter.gte = startDate;
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+        dateFilter.lte = endOfDay;
+      }
+      conditions.push({ date: dateFilter });
+    }
+
+    if (search) {
+      const termNormalized = normalizeString(search);
+      conditions.push({
+        OR: [
+          {
+            participant: {
+              user: {
+                OR: [
+                  { fullName: { contains: search, mode: 'insensitive' } },
+                  {
+                    fullName_normalized: {
+                      contains: termNormalized,
+                      mode: 'insensitive',
+                    },
+                  },
+                  { cpf: { contains: search } },
+                ],
+              },
+            },
+          },
+          {
+            healthProfessional: {
+              user: {
+                OR: [
+                  { fullName: { contains: search, mode: 'insensitive' } },
+                  {
+                    fullName_normalized: {
+                      contains: termNormalized,
+                      mode: 'insensitive',
+                    },
+                  },
+                ],
+              },
+            },
+          },
+          {
+            questionnaire: {
+              title: { contains: search, mode: 'insensitive' },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.QuestionnaireResponseWhereInput = { AND: conditions };
+
+    const [responses, total] = await Promise.all([
+      this.prisma.questionnaireResponse.findMany({
+        where,
+        select: {
+          id: true,
+          totalScore: true,
+          classification: true,
+          date: true,
+          questionnaire: {
+            select: {
+              title: true,
+              slug: true,
+            },
+          },
+          participant: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  fullName: true,
+                  cpf: true,
+                },
+              },
+            },
+          },
+          healthProfessional: {
+            select: {
+              id: true,
+              speciality: true,
+              user: {
+                select: {
+                  fullName: true,
+                },
+              },
+            },
+          },
+        },
+        skip,
+        take,
+        orderBy: { date: 'desc' },
+      }),
+      this.prisma.questionnaireResponse.count({ where }),
+    ]);
+
+    const formattedData = responses.map((r) => ({
+      id: r.id,
+      date: r.date,
+      totalScore: r.totalScore,
+      classification: r.classification,
+      questionnaireTitle: r.questionnaire.title,
+      questionnaireSlug: r.questionnaire.slug,
+      participantId: r.participant.id,
+      participantName: r.participant.user.fullName,
+      participantCpf: r.participant.user.cpf,
+      healthProfessionalId: r.healthProfessional.id,
+      healthProfessionalName: r.healthProfessional.user.fullName,
+      healthProfessionalSpeciality: r.healthProfessional.speciality,
+    }));
+
+    return {
+      data: formattedData,
+      meta: {
+        total,
+        page,
+        pageSize,
+        lastPage: Math.ceil(total / pageSize),
+      },
+    };
   }
 
   async findAllByParticipant(participantId: string) {
