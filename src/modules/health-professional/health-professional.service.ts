@@ -82,12 +82,31 @@ export class HealthProfessionalService extends BaseService<
 
   async findAll(queryDto: QueryDto) {
     const customWhere = {
+      active: true,
       user: {
         active: true,
       },
     };
 
-    return super.findAll(queryDto, customWhere);
+    const result = await super.findAll(queryDto, customWhere);
+
+    const dataWithRelations = await Promise.all(
+      result.data.map(async (professional) => {
+        const { hasRelations, details } = await this.checkDeletability(
+          professional.id,
+        );
+        return {
+          ...professional,
+          hasRelations,
+          details,
+        };
+      }),
+    );
+
+    return {
+      ...result,
+      data: dataWithRelations,
+    };
   }
 
   async findOne(
@@ -184,7 +203,6 @@ export class HealthProfessionalService extends BaseService<
       return {
         ...responseData,
         hasRelations: relationInfo.hasRelations,
-        _relationsDetails: relationInfo._relationsDetails,
       };
     } catch (error) {
       if (

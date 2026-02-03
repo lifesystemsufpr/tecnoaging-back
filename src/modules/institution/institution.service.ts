@@ -47,17 +47,22 @@ export class InstitutionService {
         : undefined,
     };
 
-    const [data, total] = await Promise.all([
+    const [institutions, total] = await Promise.all([
       this.prisma.institution.findMany({
         where,
         take: Number(pageSize),
         skip: (Number(page) - 1) * Number(pageSize),
-        orderBy: {
-          [orderBy || 'title']: sortOrder || 'asc',
-        },
+        orderBy: { [orderBy || 'title']: sortOrder || 'asc' },
       }),
       this.prisma.institution.count({ where }),
     ]);
+
+    const data = await Promise.all(
+      institutions.map(async (inst) => {
+        const { hasRelations, details } = await this.checkDeletability(inst.id);
+        return { ...inst, hasRelations, details };
+      }),
+    );
 
     return {
       data,
