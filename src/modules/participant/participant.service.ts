@@ -74,15 +74,40 @@ export class ParticipantService extends BaseService<
       return { ...user, ...participant };
     });
   }
-
   async findAll(queryDto: QueryDto) {
     const customWhere = {
       active: true,
-      user: {
-        active: true,
-      },
+      user: { active: true },
     };
-    return super.findAll(queryDto, customWhere);
+
+    console.time('findAll-prisma-query');
+    const result = await super.findAll(queryDto, customWhere);
+    console.timeEnd('findAll-prisma-query');
+
+    const dataWithRelations = await Promise.all(
+      result.data.map(async (participant, index) => {
+        try {
+          const safetyInfo = await this.checkDeletability(participant.id);
+
+          return {
+            ...participant,
+            hasRelations: safetyInfo.hasRelations,
+            relationsDetails: safetyInfo.details,
+          };
+        } catch (error) {
+          console.error(
+            `[SERVICE] Falha ao processar relações do ID ${participant.id}:`,
+            error,
+          );
+          return participant;
+        }
+      }),
+    );
+
+    return {
+      ...result,
+      data: dataWithRelations,
+    };
   }
 
   async findOne(
@@ -227,6 +252,6 @@ export class ParticipantService extends BaseService<
   }
 
   async checkDeletability(id: string) {
-    return await this.prisma.checkDeletionSafety('participant', id);
+    return await this.prisma.checkDeletionSafety('Participant', id);
   }
 }

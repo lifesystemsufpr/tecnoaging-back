@@ -46,14 +46,8 @@ export class HealthUnitService {
           ? { neighborhood: { contains: neighborhood, mode: 'insensitive' } }
           : {},
         active !== undefined ? { active } : { active: true },
-        // Lógica de Data
         startDate || endDate
-          ? {
-              createdAt: {
-                gte: startDate,
-                lte: endDate,
-              },
-            }
+          ? { createdAt: { gte: startDate, lte: endDate } }
           : {},
       ],
       OR: search
@@ -65,17 +59,22 @@ export class HealthUnitService {
         : undefined,
     };
 
-    const [data, total] = await Promise.all([
+    const [units, total] = await Promise.all([
       this.prisma.healthcareUnit.findMany({
         where,
         take: Number(pageSize),
         skip: (Number(page) - 1) * Number(pageSize),
-        orderBy: {
-          [orderBy || 'name']: sortOrder || 'asc',
-        },
+        orderBy: { [orderBy || 'name']: sortOrder || 'asc' },
       }),
       this.prisma.healthcareUnit.count({ where }),
     ]);
+
+    const data = await Promise.all(
+      units.map(async (unit) => {
+        const { hasRelations, details } = await this.checkDeletability(unit.id);
+        return { ...unit, hasRelations, details };
+      }),
+    );
 
     return {
       data,

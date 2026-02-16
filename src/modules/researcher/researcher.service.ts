@@ -90,7 +90,26 @@ export class ResearcherService extends BaseService<
         active: true,
       },
     };
-    return super.findAll(queryDto, customWhere);
+
+    const result = await super.findAll(queryDto, customWhere);
+
+    const itemsWithSafetyFlag = await Promise.all(
+      result.data.map(async (researcher) => {
+        const { hasRelations, details } = await this.checkDeletability(
+          researcher.id,
+        );
+        return {
+          ...researcher,
+          hasRelations,
+          details,
+        };
+      }),
+    );
+
+    return {
+      ...result,
+      data: itemsWithSafetyFlag,
+    };
   }
 
   async findOne(id: string, tx?: Prisma.TransactionClient) {
