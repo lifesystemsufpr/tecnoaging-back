@@ -42,6 +42,12 @@ export class EvaluationController {
     return this.evaluationService.findOne(id);
   }
 
+  @Get(':id/repetitions/history')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
+  async findRepetitions(@Param('id') id: string) {
+    return this.evaluationService.getRepetitionsHistory(id);
+  }
+
   @Get(':id/detailed')
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   async findOneDetailed(@Param('id') id: string) {
