@@ -13,7 +13,6 @@ import { HealthUnitModule } from './modules/health-unit/health-unit.module';
 import { InstitutionModule } from './modules/institution/institution.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
 import { ParticipantModule } from './modules/participant/participant.module';
-import { QuestionnairesModule } from './modules/questionnaire/questionnaire.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { APP_FILTER } from '@nestjs/core';
 import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-client-exception.filter';
@@ -37,7 +36,6 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
     EvaluationModule,
     HealthUnitModule,
     InstitutionModule,
-    QuestionnairesModule,
   ],
   providers: [
     ...provideGlobalAppGuards(),

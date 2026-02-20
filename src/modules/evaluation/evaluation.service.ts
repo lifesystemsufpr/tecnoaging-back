@@ -706,4 +706,36 @@ export class EvaluationService extends BaseService<
     }
     return age;
   }
+
+  async getRepetitionsHistory(participantId: string) {
+    const evaluations = await this.prisma.evaluation.findMany({
+      where: {
+        participantId: participantId,
+        type: 'TTSTS',
+        indicators: {
+          isNot: null,
+        },
+      },
+      select: {
+        date: true,
+        indicators: {
+          select: {
+            repetitionCount: true,
+          },
+        },
+      },
+      orderBy: {
+        date: 'asc',
+      },
+    });
+
+    const formattedData = evaluations.map((ev) => ({
+      day: ev.date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+      }),
+      repetitions: ev.indicators?.repetitionCount || 0,
+    }));
+    return { data: formattedData };
+  }
 }
