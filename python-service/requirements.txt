@@ -5,3 +5,5 @@ numpy
 scipy
 ahrs
 pydantic
+joblib
+scikit-learn

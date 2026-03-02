@@ -1,15 +1,13 @@
-# Arquivo: main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Any
 import uvicorn
 from processor import STSProcessor
+from marcha_processor import MarchaProcessor
 
 app = FastAPI()
 
-# Modelo de dados (Input)
 class SensorData(BaseModel):
-    # O timestamp é opcional, se vier o índice (0, 1, 2) o processor ajusta
     timestamp: Optional[float] = 0.0 
     accel_x: float
     accel_y: float
@@ -25,13 +23,17 @@ class STSRequest(BaseModel):
     idade: int
     sexo: str
 
+class MarchaRequest(BaseModel):
+    dados: List[SensorData]
+    sexo: str
+    idade: int
+    altura: float
+
 @app.post("/processar")
 def processar_sts(req: STSRequest):
     try:
-        # Converte o modelo Pydantic para lista de dicionários puros
         raw_data = [d.model_dump() for d in req.dados]
         
-        # Instancia o processador
         processor = STSProcessor(
             raw_data_list=raw_data,
             peso=req.peso,
@@ -40,12 +42,29 @@ def processar_sts(req: STSRequest):
             sexo=req.sexo
         )
         
-        # Roda a mágica
         resultado = processor.run()
         return resultado
 
     except Exception as e:
-        # Mostra o erro no terminal para debug
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/processar-marcha")
+def processar_marcha(req: MarchaRequest):
+    try:
+        raw_data = [d.model_dump() for d in req.dados]
+        
+        processor = MarchaProcessor(
+            raw_data_list=raw_data,
+            sexo=req.sexo,
+            idade=req.idade,
+            h_estatura=req.altura
+        )
+        
+        return processor.run()
+    except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
