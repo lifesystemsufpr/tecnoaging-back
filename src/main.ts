@@ -14,6 +14,8 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
 import cookieParser = require('cookie-parser');
 import { NormalizationPipe } from './shared/pipes/normalization.pipe';
 import { HttpAdapterHost } from '@nestjs/core';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import basicAuth = require('express-basic-auth');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -47,6 +49,20 @@ async function bootstrap() {
 
   if (swaggerConfig.enabled) {
     logger.log('Swagger enabled');
+
+    const swaggerPath = swaggerConfig.path;
+
+    app.use(
+      [`/${swaggerPath}`, `/${swaggerPath}-json`],
+      basicAuth({
+        challenge: true,
+        users: {
+          [process.env.SWAGGER_USER || 'admin']:
+            process.env.SWAGGER_PASSWORD || 'admin',
+        },
+      }),
+    );
+
     setupSwagger(app, swaggerConfig);
   }
 
