@@ -109,6 +109,9 @@ jobs:
             
             export NVM_DIR="\$HOME/.nvm"
             source "\$NVM_DIR/nvm.sh"
+
+            echo "${{ secrets.ENV_DEV_ENCODED }}" | base64 -d > .env
+            chmod 600 .env
             
             cd "${APP_DIR}"
 
