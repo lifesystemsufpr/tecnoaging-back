@@ -102,27 +102,26 @@ jobs:
             deploy_artifact/ \
             "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
 
-      - name: Install dependencies and run Prisma on server
+      - name: Install dependencies, run Prisma and restart services
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
             
             export NVM_DIR="\$HOME/.nvm"
-            source "\$NVM_DIR/nvm.sh"
-            
+            [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+      
             cd "${APP_DIR}"
-
+      
             echo "${{ secrets.ENV_DEV_ENCODED }}" | base64 -d > .env
             chmod 600 .env
-
-            # 1. Runtime limpo
+      
+            # Runtime limpo
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
-
-            # 2. Carrega variáveis e LIMPA caracteres do Windows (FIX)
+      
+            # Sanitiza e carrega env
             if [ -f .env ]; then
               echo "Sanitizando e carregando .env..."
-              # Remove caracteres \r (Carriage Return) que quebram o Linux
               sed -i 's/\r$//' .env
               
               set -a
@@ -132,37 +131,24 @@ jobs:
               echo "❌ ERRO: Arquivo .env não encontrado!"
               exit 1
             fi
-
-            # 3. DEBUG: Verifica se o Linux realmente leu a variável
-            # Mostra apenas os primeiros 10 caracteres por segurança
+      
+            # Debug env
             if [ -n "\$DATABASE_URL" ]; then
               echo "✅ DATABASE_URL carregada: \${DATABASE_URL:0:10}..."
             else
-              echo "❌ ERRO CRÍTICO: DATABASE_URL está vazia após o source!"
-              # Lista o conteúdo do .env (sem valores) para ver se as chaves estão lá
-              echo "Conteúdo das chaves no .env:"
+              echo "❌ ERRO CRÍTICO: DATABASE_URL está vazia"
               cut -d '=' -f1 .env
               exit 1
             fi
-
-            # 4. Prisma
+      
+            # Prisma
             echo "Gerando Prisma Client..."
-            #npx prisma generate --config prisma.config.ts
             npx prisma generate --config prisma.config.ts --schema=prisma/schema.prisma
-            
+      
             echo "Executando Migrations..."
-            #npx prisma migrate deploy --config prisma.config.ts
             npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
-          EOF
-
-      - name: Restart backend services
-        run: |
-          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
-            cd "${APP_DIR}"
-            
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            
+      
+            # Restart PM2
             if [ -f ecosystem.config.js ]; then
               pm2 reload ecosystem.config.js --env development
               pm2 save
@@ -170,4 +156,6 @@ jobs:
               echo "❌ ecosystem.config.js não encontrado"
               exit 1
             fi
+      
+            echo "✅ Deploy finalizado com sucesso"
           EOF
