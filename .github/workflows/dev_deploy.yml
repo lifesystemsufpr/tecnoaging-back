@@ -106,6 +106,10 @@ jobs:
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
+            
+            export NVM_DIR="\$HOME/.nvm"
+            source "\$NVM_DIR/nvm.sh"
+            
             cd "${APP_DIR}"
 
             # 1. Runtime limpo
