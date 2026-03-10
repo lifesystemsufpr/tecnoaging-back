@@ -1,0 +1,162 @@
+name: DEVENV - Deploy Backend
+
+on:
+  push:
+    branches:
+      - dev_deploy
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Backend (DEVENV)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST_DEV }}
+      SSH_USER: ${{ secrets.SSH_USER_DEV }}
+      SSH_PORT: ${{ secrets.SSH_PORT_DEV }}
+
+      APP_DIR: /var/www/tecnoaging-api
+      PM2_APP: TecnoAging-api
+
+    steps:
+      # ─────────────────────────────────────
+      # CI STAGE (COMPILAÇÃO)
+      # ─────────────────────────────────────
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      # Runner descartável → instalação determinística
+      - name: Install dependencies (CI)
+        run: npm ci
+
+      # Prisma Client é necessário para o build (usa DATABASE_URL fake)
+      - name: Generate Prisma Client (CI)
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_db
+        run: npx prisma generate
+
+      # Build do NestJS
+      - name: Build backend
+        run: npm run build
+
+      # ─────────────────────────────────────
+      # DEPLOY STAGE (SERVIDOR)
+      # ─────────────────────────────────────
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_ENV }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Prepare deploy artifact
+        run: |
+          set -e
+          rm -rf deploy_artifact
+          mkdir deploy_artifact
+
+          # Código compilado
+          cp -r dist deploy_artifact/
+
+          # Prisma schema (necessário no servidor)
+          cp -r prisma deploy_artifact/
+
+          # Prisma Config (necessário para o prisma)
+          cp prisma.config.ts deploy_artifact/
+
+          # Python Service
+          cp -r python-service deploy_artifact/
+          
+          # Manifestos de dependência
+          cp package.json package-lock.json deploy_artifact/
+
+          # PM2 config (se existir)
+          [ -f ecosystem.config.js ] && cp ecosystem.config.js deploy_artifact/
+
+      - name: Deploy artifact to server
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ${APP_DIR}"
+
+          rsync -avz --delete \
+            --exclude=".env" \
+            --exclude="logs/" \
+            -e "ssh -p ${SSH_PORT}" \
+            deploy_artifact/ \
+            "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
+
+      - name: Install dependencies and run Prisma on server
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            set -e
+            cd "${APP_DIR}"
+
+            # 1. Runtime limpo
+            rm -rf node_modules
+            npm install --omit=dev --no-audit --no-fund
+
+            # 2. Carrega variáveis e LIMPA caracteres do Windows (FIX)
+            if [ -f .env ]; then
+              echo "Sanitizando e carregando .env..."
+              # Remove caracteres \r (Carriage Return) que quebram o Linux
+              sed -i 's/\r$//' .env
+              
+              set -a
+              source .env
+              set +a
+            else
+              echo "❌ ERRO: Arquivo .env não encontrado!"
+              exit 1
+            fi
+
+            # 3. DEBUG: Verifica se o Linux realmente leu a variável
+            # Mostra apenas os primeiros 10 caracteres por segurança
+            if [ -n "\$DATABASE_URL" ]; then
+              echo "✅ DATABASE_URL carregada: \${DATABASE_URL:0:10}..."
+            else
+              echo "❌ ERRO CRÍTICO: DATABASE_URL está vazia após o source!"
+              # Lista o conteúdo do .env (sem valores) para ver se as chaves estão lá
+              echo "Conteúdo das chaves no .env:"
+              cut -d '=' -f1 .env
+              exit 1
+            fi
+
+            # 4. Prisma
+            echo "Gerando Prisma Client..."
+            #npx prisma generate --config prisma.config.ts
+            npx prisma generate --config prisma.config.ts --schema=prisma/schema.prisma
+            
+            echo "Executando Migrations..."
+            #npx prisma migrate deploy --config prisma.config.ts
+            npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
+          EOF
+
+      - name: Restart backend services
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            cd "${APP_DIR}"
+            if [ -f ecosystem.config.js ]; then
+              pm2 reload ecosystem.config.js --env development
+              pm2 save
+            else
+              echo "❌ ecosystem.config.js não encontrado"
+              exit 1
+            fi
+          EOF
