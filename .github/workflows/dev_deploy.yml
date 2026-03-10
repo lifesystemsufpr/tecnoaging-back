@@ -159,6 +159,10 @@ jobs:
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             cd "${APP_DIR}"
+            
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
             if [ -f ecosystem.config.js ]; then
               pm2 reload ecosystem.config.js --env development
               pm2 save
