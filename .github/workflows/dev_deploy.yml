@@ -109,11 +109,11 @@ jobs:
             
             export NVM_DIR="\$HOME/.nvm"
             source "\$NVM_DIR/nvm.sh"
+            
+            cd "${APP_DIR}"
 
             echo "${{ secrets.ENV_DEV_ENCODED }}" | base64 -d > .env
             chmod 600 .env
-            
-            cd "${APP_DIR}"
 
             # 1. Runtime limpo
             rm -rf node_modules
