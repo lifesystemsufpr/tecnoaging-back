@@ -148,7 +148,37 @@ jobs:
             echo "Executando Migrations..."
             npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
       
+      
+            # --------------------------------
+            # Python Service Setup
+            # --------------------------------
+      
+            echo "Configurando Python service..."
+      
+            cd "${APP_DIR}/python-service"
+      
+            # cria venv se não existir
+            if [ ! -d "venv" ]; then
+              echo "Criando Python venv..."
+              python3 -m venv venv
+            else
+              echo "Reutilizando venv existente"
+            fi
+      
+            source venv/bin/activate
+      
+            pip install --upgrade pip
+      
+            echo "Instalando/atualizando dependências Python..."
+            pip install -r requirements.txt
+      
+      
+            # --------------------------------
             # Restart PM2
+            # --------------------------------
+      
+            cd "${APP_DIR}"
+      
             if [ -f ecosystem.config.js ]; then
               pm2 reload ecosystem.config.js --env development
               pm2 save
