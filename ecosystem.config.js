@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'TecnoAging-api',
-    script: 'dist/main.js',
+    script: 'dist/src/main.js',
     cwd: '/var/www/tecnoaging-api',
     instances: 1,
     exec_mode: 'fork',
