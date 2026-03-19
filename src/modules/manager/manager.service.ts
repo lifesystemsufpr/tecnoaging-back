@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserService } from '../users/user.service';
 import { CreateManagerDto } from './dto/create-manager.dto';
 import { UpdateManagerDto } from './dto/update-manager.dto';
+import { UpdateManagerProfileDto } from './dto/update-manager-profile.dto';
+import { ManagerProfileDto } from './dto/manager-profile.dto';
 import { Prisma, SystemRole, User } from '@prisma/client';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { QueryDto } from 'src/shared/dto/query.dto';
@@ -73,5 +75,30 @@ export class ManagerService {
 
   remove(id: string) {
     return this.userService.remove(id);
+  }
+
+  async getProfile(userId: string): Promise<ManagerProfileDto> {
+    const user = await this.userService.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException('Administrator profile not found.');
+    }
+
+    const { password: _password, ...profileData } = user;
+    return profileData as ManagerProfileDto;
+  }
+
+  async updateProfile(
+    userId: string,
+    updateManagerProfileDto: UpdateManagerProfileDto,
+  ): Promise<ManagerProfileDto> {
+    const user = await this.userService.update(userId, updateManagerProfileDto);
+
+    if (!user) {
+      throw new NotFoundException('Administrator profile not found.');
+    }
+
+    const { password: _password, ...profileData } = user;
+    return profileData as ManagerProfileDto;
   }
 }

@@ -11,6 +11,7 @@ import { HealthProfessionalModule } from './modules/health-professional/health-p
 import { EvaluationModule } from './modules/evaluation/evaluation.module';
 import { HealthUnitModule } from './modules/health-unit/health-unit.module';
 import { InstitutionModule } from './modules/institution/institution.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
 import { ParticipantModule } from './modules/participant/participant.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
@@ -36,6 +37,7 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
     EvaluationModule,
     HealthUnitModule,
     InstitutionModule,
+    DashboardModule,
   ],
   providers: [
     ...provideGlobalAppGuards(),

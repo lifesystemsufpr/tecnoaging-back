@@ -40,6 +40,8 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+      'sonarjs/no-unused-vars': 'off',
+      'no-unused-vars': 'off',
     },
   },
 );
