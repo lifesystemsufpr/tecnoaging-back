@@ -13,6 +13,8 @@ import { RequestUser } from './decorators/request-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { Payload } from './interfaces/auth.interface';
 import { LoginDto } from './dto/login.dto';
+import { RequestPasswordRecoveryDto } from './dto/request-password-recovery.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiBody } from '@nestjs/swagger';
@@ -100,5 +102,24 @@ export class AuthController {
       res.clearCookie('refresh_token');
       throw new UnauthorizedException('Refresh token inválido ou expirado');
     }
+  }
+
+  @Post('password-recovery')
+  @Public()
+  async requestPasswordRecovery(
+    @Body() requestPasswordRecoveryDto: RequestPasswordRecoveryDto,
+  ) {
+    return this.authService.initiatePasswordRecovery(
+      requestPasswordRecoveryDto.email,
+    );
+  }
+
+  @Post('reset-password')
+  @Public()
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.newPassword,
+    );
   }
 }

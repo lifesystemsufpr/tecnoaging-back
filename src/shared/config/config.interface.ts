@@ -3,6 +3,8 @@ export interface AppConfig {
   cors: CorsConfig;
   swagger: SwaggerConfig;
   security: SecurityConfig;
+  email: EmailConfig;
+  passwordRecovery: PasswordRecoveryConfig;
 }
 
 export interface NestConfig {
@@ -30,4 +32,18 @@ export interface SwaggerConfig {
   version: string;
   path: string;
   enabled: boolean;
+}
+
+export interface EmailConfig {
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  from: string;
+  fromName: string;
+}
+
+export interface PasswordRecoveryConfig {
+  tokenExpiryHours: number;
+  frontendBaseUrl: string;
 }

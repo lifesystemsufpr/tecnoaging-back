@@ -17,6 +17,11 @@ model User {
   role                SystemRole
   phone               String?
 
+  // Password Recovery fields
+  passwordResetToken     String?   @unique
+  passwordResetExpiresAt DateTime?
+  passwordResetUsedAt    DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -25,6 +30,7 @@ model User {
   researcher         Researcher?
 
   @@index([fullName_normalized])
+  @@index([passwordResetToken])
   @@map("user")
 }
 
@@ -55,8 +61,8 @@ model HealthProfessional {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  evaluation            Evaluation[]
-  user                  User                    @relation(fields: [id], references: [id])
+  evaluation Evaluation[]
+  user       User         @relation(fields: [id], references: [id])
 
   @@index([speciality])
   @@index([speciality_normalized])
@@ -99,8 +105,8 @@ model Participant {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  evaluations            Evaluation[]
-  user                   User                    @relation(fields: [id], references: [id])
+  evaluations Evaluation[]
+  user        User         @relation(fields: [id], references: [id])
 
   @@map("participant")
 }
@@ -146,6 +152,7 @@ model Evaluation {
   sensorData         SensorData[]
   indicators         EvaluationIndicators?
   cycles             EvaluationCycle[]
+
   @@index([participantId])
   @@index([healthProfessionalId])
   @@index([healthcareUnitId])
@@ -163,7 +170,7 @@ model EvaluationIndicators {
   totalEnergy     Float  @default(0.0)
   classification  String @default("")
 
-  processedCurve  Json?
+  processedCurve Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -175,26 +182,26 @@ model EvaluationIndicators {
 }
 
 model EvaluationCycle {
-  id              String     @id @default(uuid())
-  evaluationId    String
-  
-  cycleNumber     Int   
-  
-  totalTime       Float 
-  standUpTime     Float      
-  sitDownTime     Float      
-  
-  frequency       Float      // Hz
-  meanPower       Float      // J/s (Watts)
-  extensionVel    Float      // Degrees/s (Rising velocity)
-  flexionVel      Float      // Degrees/s (Sitting velocity)
-  
-  peak1Val        Float?     
-  peak2Val        Float?
+  id           String @id @default(uuid())
+  evaluationId String
 
-  createdAt       DateTime   @default(now())
+  cycleNumber Int
 
-  evaluation      Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  totalTime   Float
+  standUpTime Float
+  sitDownTime Float
+
+  frequency    Float // Hz
+  meanPower    Float // J/s (Watts)
+  extensionVel Float // Degrees/s (Rising velocity)
+  flexionVel   Float // Degrees/s (Sitting velocity)
+
+  peak1Val Float?
+  peak2Val Float?
+
+  createdAt DateTime @default(now())
+
+  evaluation Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
   @@index([evaluationId])
   @@map("evaluation_cycle")

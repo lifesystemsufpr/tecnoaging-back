@@ -28,13 +28,17 @@ export class ParticipantController {
     return this.participantService.create(createParticipantDto);
   }
 
-  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   @Get()
   findAll(@Query() queryDto: QueryDto) {
     return this.participantService.findAll(queryDto);
   }
 
-  @Roles([SystemRole.PARTICIPANT, SystemRole.HEALTH_PROFESSIONAL])
+  @Roles([
+    SystemRole.PARTICIPANT,
+    SystemRole.HEALTH_PROFESSIONAL,
+    SystemRole.RESEARCHER,
+  ])
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.participantService.findOne(id);
