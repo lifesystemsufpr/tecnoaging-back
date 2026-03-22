@@ -19,6 +19,22 @@ import { HttpService } from '@nestjs/axios';
 import { isAxiosError } from 'axios';
 import { lastValueFrom } from 'rxjs';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
+import { formatInTimeZone } from 'date-fns-tz';
+import {
+  CurrentMonthByGenderResponseDto,
+  DashboardSummaryResponseDto,
+  MonthlyHistoryResponseDto,
+  TeamPerformanceResponseDto,
+} from './dto/dashboard/dashboard-response.dto';
+import { DASHBOARD_TIMEZONE, MONTH_LABELS_PT_BR } from './constants';
+import {
+  buildMonthKey,
+  calculateAverageCount,
+  getCurrentMonthAndYear,
+  getCurrentMonthRangeUtc,
+  getLastTwelveMonths,
+  getMonthStartUtc,
+} from './utils/dashboard.utils';
 
 // --- TIPAGENS AUXILIARES ---
 
@@ -705,6 +721,194 @@ export class EvaluationService extends BaseService<
       age--;
     }
     return age;
+  }
+
+  async getCurrentMonthByGender(
+    healthProfessionalId: string,
+  ): Promise<CurrentMonthByGenderResponseDto> {
+    await this.ensureHealthProfessionalExists(healthProfessionalId);
+
+    const { startUtc, endUtc } = getCurrentMonthRangeUtc(DASHBOARD_TIMEZONE);
+    const { month, year } = getCurrentMonthAndYear(DASHBOARD_TIMEZONE);
+
+    const evaluations = await this.prisma.evaluation.findMany({
+      where: {
+        healthProfessionalId,
+        date: {
+          gte: startUtc,
+          lt: endUtc,
+        },
+      },
+      select: {
+        participant: {
+          select: {
+            user: {
+              select: {
+                gender: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    let male = 0;
+    let female = 0;
+
+    for (const evaluation of evaluations) {
+      const gender = evaluation.participant.user.gender;
+      if (gender === 'MALE') male++;
+      if (gender === 'FEMALE') female++;
+    }
+
+    return {
+      timezone: DASHBOARD_TIMEZONE,
+      month,
+      year,
+      total: evaluations.length,
+      male,
+      female,
+    };
+  }
+
+  async getTeamPerformance(
+    healthProfessionalId: string,
+  ): Promise<TeamPerformanceResponseDto> {
+    await this.ensureHealthProfessionalExists(healthProfessionalId);
+
+    const unitRows = await this.prisma.evaluation.findMany({
+      where: { healthProfessionalId },
+      select: { healthcareUnitId: true },
+      distinct: ['healthcareUnitId'],
+    });
+
+    const unitIds = unitRows.map((row) => row.healthcareUnitId);
+    if (!unitIds.length) {
+      return {
+        individual: null,
+        teamAverage: 0,
+        difference: 0,
+        hasIndividualData: false,
+      };
+    }
+
+    const [teamByProfessional, individualTotal] = await Promise.all([
+      this.prisma.evaluation.groupBy({
+        by: ['healthProfessionalId'],
+        where: {
+          healthcareUnitId: { in: unitIds },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      this.prisma.evaluation.count({
+        where: { healthProfessionalId },
+      }),
+    ]);
+
+    const teamTestCounts = teamByProfessional.map((item) => item._count._all);
+    const teamAverage = calculateAverageCount(teamTestCounts);
+
+    const hasIndividualData = individualTotal > 0;
+    const individual = hasIndividualData ? individualTotal : null;
+    const difference = Number(((individual ?? 0) - teamAverage).toFixed(2));
+
+    return {
+      individual,
+      teamAverage,
+      difference,
+      hasIndividualData,
+    };
+  }
+
+  async getMonthlyHistory(
+    healthProfessionalId: string,
+  ): Promise<MonthlyHistoryResponseDto> {
+    await this.ensureHealthProfessionalExists(healthProfessionalId);
+
+    const months = getLastTwelveMonths(DASHBOARD_TIMEZONE);
+    const firstMonth = months[0];
+    const lastMonth = months[months.length - 1];
+
+    const startUtc = getMonthStartUtc(
+      firstMonth.year,
+      firstMonth.month,
+      DASHBOARD_TIMEZONE,
+    );
+    const endUtc = getMonthStartUtc(
+      lastMonth.year,
+      lastMonth.month + 1,
+      DASHBOARD_TIMEZONE,
+    );
+
+    const evaluations = await this.prisma.evaluation.findMany({
+      where: {
+        healthProfessionalId,
+        date: {
+          gte: startUtc,
+          lt: endUtc,
+        },
+      },
+      select: {
+        date: true,
+      },
+    });
+
+    const map = new Map<string, number>();
+    for (const month of months) {
+      map.set(buildMonthKey(month.year, month.month), 0);
+    }
+
+    for (const evaluation of evaluations) {
+      const monthKey = formatInTimeZone(
+        evaluation.date,
+        DASHBOARD_TIMEZONE,
+        'yyyy-MM',
+      );
+      if (!map.has(monthKey)) continue;
+      map.set(monthKey, (map.get(monthKey) || 0) + 1);
+    }
+
+    const data = months.map(({ year, month }) => ({
+      monthLabel: MONTH_LABELS_PT_BR[month - 1],
+      month,
+      year,
+      total: map.get(buildMonthKey(year, month)) || 0,
+    }));
+
+    return {
+      timezone: DASHBOARD_TIMEZONE,
+      data,
+    };
+  }
+
+  async getDashboardSummary(
+    healthProfessionalId: string,
+  ): Promise<DashboardSummaryResponseDto> {
+    const [currentMonthByGender, teamPerformance, monthlyHistory] =
+      await Promise.all([
+        this.getCurrentMonthByGender(healthProfessionalId),
+        this.getTeamPerformance(healthProfessionalId),
+        this.getMonthlyHistory(healthProfessionalId),
+      ]);
+
+    return {
+      currentMonthByGender,
+      teamPerformance,
+      monthlyHistory,
+    };
+  }
+
+  private async ensureHealthProfessionalExists(healthProfessionalId: string) {
+    const healthProfessional = await this.prisma.healthProfessional.findUnique({
+      where: { id: healthProfessionalId },
+      select: { id: true },
+    });
+
+    if (!healthProfessional) {
+      throw new NotFoundException('Profissional de saúde não encontrado.');
+    }
   }
 
   async getRepetitionsHistory(participantId: string) {
