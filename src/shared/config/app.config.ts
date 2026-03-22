@@ -57,6 +57,20 @@ export default () => {
       corsOrigins: getCorsOrigins(process.env.CORS_ORIGINS),
     },
     security: securityConfig,
+    email: {
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: process.env.SMTP_PORT ? +process.env.SMTP_PORT : 587,
+      user: process.env.SMTP_USER || 'your-email@gmail.com',
+      password: process.env.SMTP_PASSWORD || 'your-app-password',
+      from: process.env.SMTP_FROM_EMAIL || 'noreply@tecnoaging.com',
+      fromName: process.env.SMTP_FROM_NAME || 'TecnoAging',
+    },
+    passwordRecovery: {
+      tokenExpiryHours: process.env.PASSWORD_RECOVERY_TOKEN_EXPIRY_HOURS
+        ? +process.env.PASSWORD_RECOVERY_TOKEN_EXPIRY_HOURS
+        : 24,
+      frontendBaseUrl: process.env.FRONTEND_BASE_URL || 'http://localhost:3000',
+    },
   };
 
   const logger = new Logger('AppConfig');

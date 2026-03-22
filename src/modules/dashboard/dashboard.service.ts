@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../shared/prisma/prisma.service';
 import {
   EvaluationsCountDto,
   MostPerformedTestsDto,
@@ -7,57 +6,21 @@ import {
   MonthlyEvaluationsDto,
   MonthlyAverageDto,
 } from './dto';
+import { DashboardRepository } from './repositories/dashboard.repository';
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private repository: DashboardRepository) {}
 
   async getEvaluationsCount(
     participantId: string,
   ): Promise<EvaluationsCountDto> {
-    const totalEvaluations = await this.prisma.evaluation.count({
-      where: { participantId },
-    });
+    const counts =
+      await this.repository.getEvaluationsCountByParticipant(participantId);
 
-    const currentDate = new Date(2026, 2, 18);
-    const monthStart = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      1,
-    );
-    const monthEnd = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0,
-    );
-
-    const monthlyEvaluations = await this.prisma.evaluation.count({
-      where: {
-        participantId,
-        date: {
-          gte: monthStart,
-          lte: monthEnd,
-        },
-      },
-    });
-
-    const prevMonthEnd = new Date(monthStart);
-    prevMonthEnd.setDate(0);
-    const prevMonthStart = new Date(
-      prevMonthEnd.getFullYear(),
-      prevMonthEnd.getMonth(),
-      1,
-    );
-
-    const previousMonthEvaluations = await this.prisma.evaluation.count({
-      where: {
-        participantId,
-        date: {
-          gte: prevMonthStart,
-          lte: prevMonthEnd,
-        },
-      },
-    });
+    const totalEvaluations = Number(counts.total);
+    const monthlyEvaluations = Number(counts.current_month);
+    const previousMonthEvaluations = Number(counts.previous_month);
 
     let percentage = 0;
     let trend: 'positive' | 'negative' | 'neutral' = 'neutral';
@@ -87,53 +50,31 @@ export class DashboardService {
   async getMostPerformedTests(
     participantId: string,
   ): Promise<MostPerformedTestsDto> {
-    const currentDate = new Date(2026, 2, 18);
-    const monthStart = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      1,
-    );
-    const monthEnd = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0,
-    );
-
-    const evaluationsByType = await this.prisma.evaluation.groupBy({
-      by: ['type'],
-      where: {
-        participantId,
-        date: {
-          gte: monthStart,
-          lte: monthEnd,
-        },
-      },
-      _count: true,
-    });
+    const testResults =
+      await this.repository.getMostPerformedTestsByParticipant(participantId);
 
     const testNames: Record<string, string> = {
-      FTSTS: 'FTSTS (5 Times Sit to Stand Test)',
       TTSTS: 'TTSTS (30 Times Sit to Stand Test)',
     };
 
-    const total = evaluationsByType.reduce((sum, item) => sum + item._count, 0);
+    const total = testResults.reduce(
+      (sum, item) => sum + Number(item.count),
+      0,
+    );
 
-    const tests = evaluationsByType.map((item) => ({
+    const tests = testResults.map((item) => ({
       name: item.type,
       fullName: testNames[item.type] || item.type,
-      count: item._count,
-      percentage: total > 0 ? Math.round((item._count / total) * 100) : 0,
+      count: Number(item.count),
+      percentage:
+        total > 0 ? Math.round((Number(item.count) / total) * 100) : 0,
     }));
 
     let mostPerformed: { name: string; count: number } | null = null;
     if (tests.length > 0) {
-      const top = tests.reduce(
-        (prev, current) => (current.count > prev.count ? current : prev),
-        tests[0],
-      );
       mostPerformed = {
-        name: top.name,
-        count: top.count,
+        name: tests[0].name,
+        count: tests[0].count,
       };
     }
 
@@ -145,27 +86,12 @@ export class DashboardService {
   }
 
   async getAverageDuration(participantId: string): Promise<AverageDurationDto> {
-    const evaluations = await this.prisma.evaluation.findMany({
-      where: { participantId },
-      select: {
-        time_init: true,
-        time_end: true,
-      },
-    });
+    const result =
+      await this.repository.getAverageDurationByParticipant(participantId);
 
-    let averageDuration = 0;
-    if (evaluations.length > 0) {
-      const totalSeconds = evaluations.reduce((sum, evaluation) => {
-        const duration =
-          new Date(evaluation.time_end).getTime() -
-          new Date(evaluation.time_init).getTime();
-        return sum + duration / 1000;
-      }, 0);
-      averageDuration = Math.round(totalSeconds / evaluations.length);
-    }
-
+    const averageDuration = result?.average_duration || 0;
     const trend: 'slower' | 'faster' =
-      evaluations.length === 0 ? 'faster' : 'slower';
+      Number(result?.count || 0) === 0 ? 'faster' : 'slower';
 
     return {
       averageDuration: {
@@ -203,29 +129,16 @@ export class DashboardService {
       'Dez',
     ];
 
-    const yearStart = new Date(currentYear, 0, 1);
-    const yearEnd = new Date(currentYear, 11, 31);
-
-    const evaluationsByMonth = await this.prisma.evaluation.groupBy({
-      by: ['date'],
-      where: {
-        participantId,
-        date: {
-          gte: yearStart,
-          lte: yearEnd,
-        },
-      },
-      _count: true,
-    });
+    const dbResults =
+      await this.repository.getMonthlyEvaluationsByParticipant(participantId);
 
     const monthlyData: Record<number, number> = {};
     for (let i = 1; i <= 12; i++) {
       monthlyData[i] = 0;
     }
 
-    evaluationsByMonth.forEach((item) => {
-      const month = new Date(item.date).getMonth() + 1;
-      monthlyData[month]++;
+    dbResults.forEach((item) => {
+      monthlyData[item.month] = Number(item.count);
     });
 
     const monthlyArray = Object.entries(monthlyData).map(
@@ -260,73 +173,26 @@ export class DashboardService {
       0,
     );
 
-    // Avaliações do mês corrente agrupadas por tipo
-    const evaluationsByType = await this.prisma.evaluation.findMany({
-      where: {
-        participantId,
-        date: {
-          gte: monthStart,
-          lte: monthEnd,
-        },
-      },
-      select: {
-        type: true,
-        time_init: true,
-        time_end: true,
-      },
-    });
+    const evaluations =
+      await this.repository.getMonthlyAverageByParticipant(participantId);
 
-    const testNames: Record<string, string> = {
-      FTSTS: 'FTSTS (5 Times Sit to Stand Test)',
-      TTSTS: 'TTSTS (30 Times Sit to Stand Test)',
-    };
+    const averageDuration = evaluations?.average_duration || 0;
+    const evaluationCount = Number(evaluations?.count || 0);
 
-    const grouped: Record<string, { durations: number[]; count: number }> = {
-      FTSTS: { durations: [], count: 0 },
-      TTSTS: { durations: [], count: 0 },
-    };
-
-    evaluationsByType.forEach((evaluation) => {
-      const duration =
-        (new Date(evaluation.time_end).getTime() -
-          new Date(evaluation.time_init).getTime()) /
-        1000;
-      grouped[evaluation.type].durations.push(duration);
-      grouped[evaluation.type].count++;
-    });
-
-    const evaluationTypes = Object.entries(grouped).map(([type, data]) => {
-      const averageDuration =
-        data.durations.length > 0
-          ? Math.round(
-              data.durations.reduce((a, b) => a + b, 0) / data.durations.length,
-            )
-          : 0;
-
-      return {
-        type,
-        fullName: testNames[type] || type,
+    const evaluationTypes = [
+      {
+        type: 'TTSTS',
+        fullName: 'TTSTS (30 Times Sit to Stand Test)',
         averageDuration,
         unit: 'seconds' as const,
-        count: data.count,
-      };
-    });
-
-    const allDurations = [
-      ...grouped.FTSTS.durations,
-      ...grouped.TTSTS.durations,
+        count: evaluationCount,
+      },
     ];
-    const overallAverage =
-      allDurations.length > 0
-        ? Math.round(
-            allDurations.reduce((a, b) => a + b, 0) / allDurations.length,
-          )
-        : 0;
 
     return {
-      subtitle: 'TUG e 5TSTS em segundos',
+      subtitle: 'TTSTS em segundos',
       evaluationTypes,
-      overallAverage,
+      overallAverage: averageDuration,
       month: currentDate.getMonth() + 1,
       year: currentDate.getFullYear(),
       periodStart: monthStart.toISOString().split('T')[0],

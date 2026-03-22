@@ -3,14 +3,24 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AccessToken, JwtPayload, Payload } from './interfaces/auth.interface';
 import { User } from '@prisma/client';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
-import { comparePassword } from 'src/shared/functions/hash-password';
+import {
+  comparePassword,
+  hashPassword,
+} from 'src/shared/functions/hash-password';
 import { ConfigService } from '@nestjs/config';
-import { SecurityConfig } from 'src/shared/config/config.interface';
+import {
+  SecurityConfig,
+  PasswordRecoveryConfig,
+} from 'src/shared/config/config.interface';
+import { EmailService } from 'src/shared/services/email/email.service';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +30,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async validateCredentials(
@@ -168,5 +179,164 @@ export class AuthService {
       return null;
     }
     return user;
+  }
+
+  async initiatePasswordRecovery(email: string): Promise<{ message: string }> {
+    try {
+      const user = await this.findUserByEmail(email);
+
+      if (!user) {
+        throw new NotFoundException('Usuário não encontrado');
+      }
+
+      if (user.role === 'PARTICIPANT') {
+        throw new ForbiddenException(
+          'Participantes não podem recuperar senha através de email',
+        );
+      }
+
+      const resetToken = this.generateResetToken();
+      const tokenHash = await hashPassword(resetToken);
+
+      const passwordRecoveryConfig =
+        this.configService.getOrThrow<PasswordRecoveryConfig>(
+          'passwordRecovery',
+        );
+      const expiresAt = new Date(
+        Date.now() + passwordRecoveryConfig.tokenExpiryHours * 60 * 60 * 1000,
+      );
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordResetToken: tokenHash,
+          passwordResetExpiresAt: expiresAt,
+          passwordResetUsedAt: null,
+        },
+      });
+
+      const recoveryLink = this.generateRecoveryLink(resetToken);
+
+      await this.emailService.sendPasswordRecoveryEmail(
+        email,
+        user.fullName,
+        recoveryLink,
+      );
+
+      this.logger.log(`Password recovery initiated for user ${user.id}`);
+
+      return {
+        message:
+          'Email de recuperação de senha foi enviado para seu email registrado',
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+
+      this.logger.error('Error initiating password recovery', error);
+      throw new BadRequestException('Erro ao iniciar recuperação de senha');
+    }
+  }
+
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: {
+          passwordResetToken: { not: null },
+        },
+      });
+
+      if (!user || !user.passwordResetToken) {
+        throw new BadRequestException('Token de recuperação inválido');
+      }
+
+      const isTokenValid = await comparePassword(
+        token,
+        user.passwordResetToken,
+      );
+
+      if (!isTokenValid) {
+        throw new BadRequestException('Token de recuperação inválido');
+      }
+
+      if (
+        !user.passwordResetExpiresAt ||
+        user.passwordResetExpiresAt < new Date()
+      ) {
+        throw new BadRequestException('Token de recuperação expirado');
+      }
+
+      if (user.passwordResetUsedAt) {
+        throw new BadRequestException('Token de recuperação já foi utilizado');
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          passwordResetToken: null,
+          passwordResetExpiresAt: null,
+          passwordResetUsedAt: new Date(),
+        },
+      });
+
+      this.logger.log(`Password reset completed for user ${user.id}`);
+
+      return {
+        message: 'Senha redefinida com sucesso',
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      this.logger.error('Error resetting password', error);
+      throw new BadRequestException('Erro ao redefinir senha');
+    }
+  }
+
+  private async findUserByEmail(email: string): Promise<User | null> {
+    const researcher = await this.prisma.researcher.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (researcher) {
+      return await this.prisma.user.findUnique({
+        where: { id: researcher.id },
+      });
+    }
+
+    const healthProfessional = await this.prisma.healthProfessional.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (healthProfessional) {
+      return await this.prisma.user.findUnique({
+        where: { id: healthProfessional.id },
+      });
+    }
+
+    return null;
+  }
+
+  private generateResetToken(): string {
+    return randomBytes(32).toString('hex');
+  }
+
+  private generateRecoveryLink(token: string): string {
+    const passwordRecoveryConfig =
+      this.configService.getOrThrow<PasswordRecoveryConfig>('passwordRecovery');
+    const baseUrl = passwordRecoveryConfig.frontendBaseUrl;
+    return `${baseUrl}/reset-password?token=${token}`;
   }
 }
