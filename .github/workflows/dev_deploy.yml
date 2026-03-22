@@ -60,7 +60,7 @@ jobs:
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_ENV }}
+          ssh-private-key: ${{ secrets.DEVENV_SSH_PRIVATE_KEY }}
 
       - name: Add server to known_hosts
         run: |
@@ -84,7 +84,7 @@ jobs:
 
           # Python Service
           cp -r python-service deploy_artifact/
-          
+
           # Manifestos de dependência
           cp package.json package-lock.json deploy_artifact/
 
@@ -106,26 +106,26 @@ jobs:
         run: |
           ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
-            
+
             export NVM_DIR="\$HOME/.nvm"
             [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
 
             nvm use default
-      
+
             cd "${APP_DIR}"
-      
+
             echo "${{ secrets.ENV_DEV_ENCODED }}" | base64 -d > .env
             chmod 600 .env
-      
+
             # Runtime limpo
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
-      
+
             # Sanitiza e carrega env
             if [ -f .env ]; then
               echo "Sanitizando e carregando .env..."
               sed -i 's/\r$//' .env
-              
+
               set -a
               source .env
               set +a
@@ -133,7 +133,7 @@ jobs:
               echo "❌ ERRO: Arquivo .env não encontrado!"
               exit 1
             fi
-      
+
             # Debug env
             if [ -n "\$DATABASE_URL" ]; then
               echo "✅ DATABASE_URL carregada: \${DATABASE_URL:0:10}..."
@@ -142,23 +142,23 @@ jobs:
               cut -d '=' -f1 .env
               exit 1
             fi
-      
+
             # Prisma
             echo "Gerando Prisma Client..."
             npx prisma generate --config prisma.config.ts --schema=prisma/schema.prisma
-      
+
             echo "Executando Migrations..."
             npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
-      
-      
+
+
             # --------------------------------
             # Python Service Setup
             # --------------------------------
-      
+
             echo "Configurando Python service..."
-      
+
             cd "${APP_DIR}/python-service"
-      
+
             # cria venv se não existir
             if [ ! -d "venv" ]; then
               echo "Criando Python venv..."
@@ -166,21 +166,21 @@ jobs:
             else
               echo "Reutilizando venv existente"
             fi
-      
+
             source venv/bin/activate
-      
+
             pip install --upgrade pip
-      
+
             echo "Instalando/atualizando dependências Python..."
             pip install -r requirements.txt
-      
-      
+
+
             # --------------------------------
             # Restart PM2
             # --------------------------------
-      
+
             cd "${APP_DIR}"
-      
+
             if [ -f ecosystem.config.js ]; then
               pm2 reload ecosystem.config.js --env development
               pm2 save
@@ -188,6 +188,6 @@ jobs:
               echo "❌ ecosystem.config.js não encontrado"
               exit 1
             fi
-      
+
             echo "✅ Deploy finalizado com sucesso"
           EOF
