@@ -13,10 +13,19 @@ import {
   ApiBearerAuth,
   ApiNoContentResponse,
   ApiCreatedResponse,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import {
+  CurrentMonthByGenderResponseDto,
+  DashboardSummaryResponseDto,
+  MonthlyHistoryResponseDto,
+  TeamPerformanceResponseDto,
+} from './dto/dashboard/dashboard-response.dto';
 
 @Controller('evaluation')
 @ApiBearerAuth()
@@ -34,6 +43,34 @@ export class EvaluationController {
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   findAll(@Query() filters: FilterEvaluationDto) {
     return this.evaluationService.findAll(filters);
+  }
+
+  @Get('dashboard/current-month-by-gender')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  @ApiOkResponse({ type: CurrentMonthByGenderResponseDto })
+  getCurrentMonthByGender(@RequestUser() user: Payload) {
+    return this.evaluationService.getCurrentMonthByGender(user.id);
+  }
+
+  @Get('dashboard/team-performance')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  @ApiOkResponse({ type: TeamPerformanceResponseDto })
+  getTeamPerformance(@RequestUser() user: Payload) {
+    return this.evaluationService.getTeamPerformance(user.id);
+  }
+
+  @Get('dashboard/monthly-history')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  @ApiOkResponse({ type: MonthlyHistoryResponseDto })
+  getMonthlyHistory(@RequestUser() user: Payload) {
+    return this.evaluationService.getMonthlyHistory(user.id);
+  }
+
+  @Get('dashboard/summary')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  @ApiOkResponse({ type: DashboardSummaryResponseDto })
+  getDashboardSummary(@RequestUser() user: Payload) {
+    return this.evaluationService.getDashboardSummary(user.id);
   }
 
   @Get(':id')
