@@ -3,7 +3,7 @@ name: DEVENV - Deploy Backend
 on:
   push:
     branches:
-      - dev
+      - dev_old
 
 permissions:
   contents: read

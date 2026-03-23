@@ -3,7 +3,7 @@ name: DEVENV - Deploy Backend
 on:
   push:
     branches:
-      - dev_deploy
+      - dev
 
 permissions:
   contents: read
@@ -91,67 +91,96 @@ jobs:
           # PM2 config (se existir)
           [ -f ecosystem.config.js ] && cp ecosystem.config.js deploy_artifact/
 
-      # ----------------------------------------
-      # Deploy via rsync (igual ao outro pipeline)
-      # ----------------------------------------
-      - name: Enviar arquivos para o servidor
-        uses: burnett01/rsync-deployments@v8
-        with:
-          switches: -avz --delete
-          path: deploy_artifact/
-          remote_path: /opt/tecnoaging/back
-          remote_host: ${{ secrets.SSH_HOST_DEV }}
-          remote_user: ${{ secrets.SSH_USER_DEV }}
-          remote_key: ${{ secrets.DEVENV_SSH_PRIVATE_KEY }}
-      
-      # ----------------------------------------
-      # Pós deploy (SSH)
-      # ----------------------------------------
-      - name: Pós deploy no servidor
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST_DEV }}
-          username: ${{ secrets.SSH_USER_DEV }}
-          key: ${{ secrets.DEVENV_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT_DEV }}
-          script: |
+      - name: Deploy artifact to server
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ${APP_DIR}"
+
+          rsync -avz --delete \
+            --exclude=".env" \
+            --exclude="logs/" \
+            -e "ssh -p ${SSH_PORT}" \
+            deploy_artifact/ \
+            "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
+
+      - name: Install dependencies, run Prisma and restart services
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
             set -e
-      
-            cd /opt/tecnoaging/back
-      
-            # ------------------------------
-            # Garantir .env
-            # ------------------------------
-            if [ ! -f .env ]; then
-              echo "❌ .env não encontrado"
-              exit 1
-            fi
-      
-            # Corrigir CRLF (igual você já fazia)
-            sed -i 's/\r$//' .env
-      
-            # ------------------------------
-            # Node
-            # ------------------------------
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            nvm use default || true
-      
-            # ------------------------------
-            # Install
-            # ------------------------------
+
+            export NVM_DIR="\$HOME/.nvm"
+            [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+
+            nvm use default
+
+            cd "${APP_DIR}"
+
+            echo "${{ secrets.ENV_DEV_ENCODED }}" | base64 -d > .env
+            chmod 600 .env
+
+            # Runtime limpo
             rm -rf node_modules
             npm install --omit=dev --no-audit --no-fund
-      
-            # ------------------------------
+
+            # Sanitiza e carrega env
+            if [ -f .env ]; then
+              echo "Sanitizando e carregando .env..."
+              sed -i 's/\r$//' .env
+
+              set -a
+              source .env
+              set +a
+            else
+              echo "❌ ERRO: Arquivo .env não encontrado!"
+              exit 1
+            fi
+
+            # Debug env
+            if [ -n "\$DATABASE_URL" ]; then
+              echo "✅ DATABASE_URL carregada: \${DATABASE_URL:0:10}..."
+            else
+              echo "❌ ERRO CRÍTICO: DATABASE_URL está vazia"
+              cut -d '=' -f1 .env
+              exit 1
+            fi
+
             # Prisma
-            # ------------------------------
-            npx prisma generate --schema=prisma/schema.prisma
-            npx prisma migrate deploy --schema=prisma/schema.prisma
-      
-            # ------------------------------
-            # PM2
-            # ------------------------------
+            echo "Gerando Prisma Client..."
+            npx prisma generate --config prisma.config.ts --schema=prisma/schema.prisma
+
+            echo "Executando Migrations..."
+            npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
+
+
+            # --------------------------------
+            # Python Service Setup
+            # --------------------------------
+
+            echo "Configurando Python service..."
+
+            cd "${APP_DIR}/python-service"
+
+            # cria venv se não existir
+            if [ ! -d "venv" ]; then
+              echo "Criando Python venv..."
+              python3 -m venv venv
+            else
+              echo "Reutilizando venv existente"
+            fi
+
+            source venv/bin/activate
+
+            pip install --upgrade pip
+
+            echo "Instalando/atualizando dependências Python..."
+            pip install -r requirements.txt
+
+
+            # --------------------------------
+            # Restart PM2
+            # --------------------------------
+
+            cd "${APP_DIR}"
+
             if [ -f ecosystem.config.js ]; then
               pm2 reload ecosystem.config.js --env development
               pm2 save
@@ -159,5 +188,6 @@ jobs:
               echo "❌ ecosystem.config.js não encontrado"
               exit 1
             fi
-      
-            echo "✅ Deploy concluído"
+
+            echo "✅ Deploy finalizado com sucesso"
+          EOF
