@@ -40,7 +40,7 @@ export class DashboardRepository {
         COUNT(*) as total,
         SUM(CASE WHEN date >= ${monthStart} AND date <= ${monthEnd} THEN 1 ELSE 0 END) as current_month,
         SUM(CASE WHEN date >= ${prevMonthStart} AND date <= ${prevMonthEnd} THEN 1 ELSE 0 END) as previous_month
-      FROM "Evaluation"
+      FROM "evaluation"
       WHERE "participantId" = ${participantId}
     `;
 
@@ -70,8 +70,8 @@ export class DashboardRepository {
       SELECT
         type,
         COUNT(*) as count,
-        (SELECT COUNT(*) FROM "Evaluation" WHERE "participantId" = ${participantId} AND date >= ${monthStart} AND date <= ${monthEnd}) as total
-      FROM "Evaluation"
+        (SELECT COUNT(*) FROM "evaluation" WHERE "participantId" = ${participantId} AND date >= ${monthStart} AND date <= ${monthEnd}) as total
+      FROM "evaluation"
       WHERE "participantId" = ${participantId}
         AND date >= ${monthStart}
         AND date <= ${monthEnd}
@@ -92,7 +92,7 @@ export class DashboardRepository {
       SELECT
         ROUND(AVG(EXTRACT(EPOCH FROM ("time_end" - "time_init")))) as average_duration,
         COUNT(*) as count
-      FROM "Evaluation"
+      FROM "evaluation"
       WHERE "participantId" = ${participantId}
     `;
 
@@ -115,7 +115,7 @@ export class DashboardRepository {
       SELECT
         EXTRACT(MONTH FROM date)::int as month,
         COUNT(*) as count
-      FROM "Evaluation"
+      FROM "evaluation"
       WHERE "participantId" = ${participantId}
         AND date >= ${yearStart}
         AND date <= ${yearEnd}
@@ -148,7 +148,7 @@ export class DashboardRepository {
       SELECT
         ROUND(AVG(EXTRACT(EPOCH FROM ("time_end" - "time_init")))) as average_duration,
         COUNT(*) as count
-      FROM "Evaluation"
+      FROM "evaluation"
       WHERE "participantId" = ${participantId}
         AND date >= ${monthStart}
         AND date <= ${monthEnd}

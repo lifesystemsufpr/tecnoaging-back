@@ -42,27 +42,24 @@ export class ManagerController {
     return this.managerService.findAll(queryDto);
   }
 
-  @Get(':cpf')
+  @Get(':id')
   @Roles([SystemRole.MANAGER])
-  findByCpf(@Param('cpf') cpf: string) {
-    return this.managerService.findByCpf(cpf);
+  findById(@Param('id') id: string) {
+    return this.managerService.findOne(id);
   }
 
-  @Patch(':cpf')
+  @Patch(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  update(
-    @Param('cpf') cpf: string,
-    @Body() updateManagerDto: UpdateManagerDto,
-  ) {
-    return this.managerService.update(cpf, updateManagerDto);
+  update(@Param('id') id: string, @Body() updateManagerDto: UpdateManagerDto) {
+    return this.managerService.update(id, updateManagerDto);
   }
 
-  @Delete(':cpf')
+  @Delete(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  remove(@Param('cpf') cpf: string) {
-    return this.managerService.remove(cpf);
+  remove(@Param('id') id: string) {
+    return this.managerService.remove(id);
   }
 
   @Get('profile')

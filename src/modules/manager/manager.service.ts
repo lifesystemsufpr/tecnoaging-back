@@ -65,10 +65,6 @@ export class ManagerService {
     return this.userService.findOne(id);
   }
 
-  findByCpf(cpf: string) {
-    return this.userService.findByCpf(cpf);
-  }
-
   update(id: string, updateUserDto: UpdateManagerDto) {
     return this.userService.update(id, updateUserDto);
   }
