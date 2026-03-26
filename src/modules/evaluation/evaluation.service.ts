@@ -242,11 +242,15 @@ export class EvaluationService extends BaseService<
     }
 
     const pythonPayload = {
-      peso: userProfile.weight,
-      altura: userProfile.height,
-      idade: userProfile.age,
-      sexo: userProfile.sex,
-      dados: rawData.map((d, i) => ({
+      date: new Date().toISOString(),
+      participantId: '',
+      participantInfo: {
+        max: userProfile.weight,
+        height: userProfile.height,
+        age: userProfile.age,
+        sex: userProfile.sex,
+      },
+      sensorData: rawData.map((d, i) => ({
         accel_x: d.accel_x,
         accel_y: d.accel_y,
         accel_z: d.accel_z,
