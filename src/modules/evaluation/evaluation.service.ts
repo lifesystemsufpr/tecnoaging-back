@@ -57,15 +57,15 @@ export type EvaluationResponse = Omit<
 
 interface PythonCycleDetail {
   Ciclo: number;
-  'Tempo total (s)': number;
-  'Tempo levantar (s)': number;
-  'Tempo sentar (s)': number;
-  'Frequência (Hz)': number;
+  'Tempo total Celular': number;
+  'Tempo levantar Celular': number;
+  'Tempo sentar Celular': number;
+  'Frequência Celular': number;
   'Potência média ciclo (J/s)': number;
-  'Vel. extensão levantar (°/s)': number;
-  'Vel. flexão sentar (°/s)': number;
-  'Valor Pico 1 (°)': number;
-  'Valor Pico 2 (°)': number;
+  'Vel. extensão levantar Celular': number;
+  'Vel. flexão sentar Celular': number;
+  'Valor Pico 1 Celular': number;
+  'Valor Pico 2 Celular': number;
 }
 
 export interface ProcessedPoint {
@@ -257,7 +257,7 @@ export class EvaluationService extends BaseService<
         gyro_x: d.gyro_x,
         gyro_y: d.gyro_y,
         gyro_z: d.gyro_z,
-        timestamp: i / 60.0,
+        timestamp: d.timestamp.toISOString(),
       })),
     };
 
@@ -303,19 +303,20 @@ export class EvaluationService extends BaseService<
         });
 
         if (result.detalhes_ciclos && result.detalhes_ciclos.length > 0) {
+
           await tx.evaluationCycle.createMany({
             data: result.detalhes_ciclos.map((c) => ({
               evaluationId,
               cycleNumber: c.Ciclo,
-              totalTime: c['Tempo total (s)'],
-              standUpTime: c['Tempo levantar (s)'],
-              sitDownTime: c['Tempo sentar (s)'],
-              frequency: c['Frequência (Hz)'],
+              totalTime: c['Tempo total Celular'],
+              standUpTime: c['Tempo levantar Celular'],
+              sitDownTime: c['Tempo sentar Celular'],
+              frequency: c['Frequência Celular'],
               meanPower: c['Potência média ciclo (J/s)'],
-              extensionVel: c['Vel. extensão levantar (°/s)'],
-              flexionVel: c['Vel. flexão sentar (°/s)'],
-              peak1Val: c['Valor Pico 1 (°)'],
-              peak2Val: c['Valor Pico 2 (°)'],
+              extensionVel: c['Vel. extensão levantar Celular'],
+              flexionVel: c['Vel. flexão sentar Celular'],
+              peak1Val: c['Valor Pico 1 Celular'],
+              peak2Val: c['Valor Pico 2 Celular'],
             })),
           });
         }
