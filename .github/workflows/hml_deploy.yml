@@ -1,0 +1,193 @@
+name: HOMOLOG TECNOAGING - Deploy Backend
+
+on:
+  push:
+    branches:
+      - hml
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy Backend (DEVENV)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST_HML }}
+      SSH_USER: ${{ secrets.SSH_USER_HML }}
+      SSH_PORT: ${{ secrets.SSH_PORT_HML }}
+
+      APP_DIR: /var/www/tecnoaging-api
+      PM2_APP: TecnoAging-api
+
+    steps:
+      # ─────────────────────────────────────
+      # CI STAGE (COMPILAÇÃO)
+      # ─────────────────────────────────────
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      # Runner descartável → instalação determinística
+      - name: Install dependencies (CI)
+        run: npm ci
+
+      # Prisma Client é necessário para o build (usa DATABASE_URL fake)
+      - name: Generate Prisma Client (CI)
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_db
+        run: npx prisma generate
+
+      # Build do NestJS
+      - name: Build backend
+        run: npm run build
+
+      # ─────────────────────────────────────
+      # DEPLOY STAGE (SERVIDOR)
+      # ─────────────────────────────────────
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_HML }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT}" -H "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Prepare deploy artifact
+        run: |
+          set -e
+          rm -rf deploy_artifact
+          mkdir deploy_artifact
+
+          # Código compilado
+          cp -r dist deploy_artifact/
+
+          # Prisma schema (necessário no servidor)
+          cp -r prisma deploy_artifact/
+
+          # Prisma Config (necessário para o prisma)
+          cp prisma.config.ts deploy_artifact/
+
+          # Python Service
+          cp -r python-service deploy_artifact/
+
+          # Manifestos de dependência
+          cp package.json package-lock.json deploy_artifact/
+
+          # PM2 config (se existir)
+          [ -f ecosystem.config.js ] && cp ecosystem.config.js deploy_artifact/
+
+      - name: Deploy artifact to server
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "mkdir -p ${APP_DIR}"
+
+          rsync -avz --delete \
+            --exclude=".env" \
+            --exclude="logs/" \
+            -e "ssh -p ${SSH_PORT}" \
+            deploy_artifact/ \
+            "${SSH_USER}@${SSH_HOST}:${APP_DIR}/"
+
+      - name: Install dependencies, run Prisma and restart services
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" << EOF
+            set -e
+
+            export NVM_DIR="\$HOME/.nvm"
+            [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+
+            nvm use default
+
+            cd "${APP_DIR}"
+
+            echo "${{ secrets.ENV_HML_ENCODED }}" | base64 -d > .env
+            chmod 600 .env
+
+            # Runtime limpo
+            rm -rf node_modules
+            npm install --omit=dev --no-audit --no-fund
+
+            # Sanitiza e carrega env
+            if [ -f .env ]; then
+              echo "Sanitizando e carregando .env..."
+              sed -i 's/\r$//' .env
+
+              set -a
+              source .env
+              set +a
+            else
+              echo "❌ ERRO: Arquivo .env não encontrado!"
+              exit 1
+            fi
+
+            # Debug env
+            if [ -n "\$DATABASE_URL" ]; then
+              echo "✅ DATABASE_URL carregada: \${DATABASE_URL:0:10}..."
+            else
+              echo "❌ ERRO CRÍTICO: DATABASE_URL está vazia"
+              cut -d '=' -f1 .env
+              exit 1
+            fi
+
+            # Prisma
+            echo "Gerando Prisma Client..."
+            npx prisma generate --config prisma.config.ts --schema=prisma/schema.prisma
+
+            echo "Executando Migrations..."
+            npx prisma migrate deploy --config prisma.config.ts --schema=prisma/schema.prisma
+
+
+            # --------------------------------
+            # Python Service Setup
+            # --------------------------------
+
+            echo "Configurando Python service..."
+
+            cd "${APP_DIR}/python-service"
+
+            # cria venv se não existir
+            if [ ! -d "venv" ]; then
+              echo "Criando Python venv..."
+              python3 -m venv venv
+            else
+              echo "Reutilizando venv existente"
+            fi
+
+            source venv/bin/activate
+
+            pip install --upgrade pip
+
+            echo "Instalando/atualizando dependências Python..."
+            pip install -r requirements.txt
+
+
+            # --------------------------------
+            # Restart PM2
+            # --------------------------------
+
+            cd "${APP_DIR}"
+
+            if [ -f ecosystem.config.js ]; then
+              pm2 reload ecosystem.config.js --env development
+              pm2 save
+            else
+              echo "❌ ecosystem.config.js não encontrado"
+              exit 1
+            fi
+
+            echo "✅ Deploy finalizado com sucesso"
+          EOF
