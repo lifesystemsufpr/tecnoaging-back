@@ -1,0 +1,69 @@
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role-guard.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { SystemRole } from '@prisma/client';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DashboardAdvancedService } from './dashboard-advanced.service';
+import {
+  AverageTestByAgeGroupDto,
+  MonthlyHistoryDto,
+  DashboardSummaryDto,
+  CurrentMonthEvaluationsDto,
+  EvaluationsByTestAndGenderDto,
+  Gender,
+  TestType,
+} from './dto/dashboard-advanced.dto';
+
+@Controller('dashboard/advanced')
+@UseGuards(JwtAuthGuard, RoleGuard)
+export class DashboardAdvancedController {
+  constructor(private service: DashboardAdvancedService) {}
+
+  @Get('average-test-by-age-group')
+  @Roles([SystemRole.RESEARCHER, SystemRole.MANAGER])
+  async getAverageTestByAgeGroup(
+    @RequestUser() user: Payload,
+    @Query('gender') gender?: Gender,
+  ): Promise<AverageTestByAgeGroupDto[]> {
+    return this.service.getAverageTestByAgeGroup(user.id, gender);
+  }
+
+  @Get('monthly-history')
+  @Roles([SystemRole.RESEARCHER, SystemRole.MANAGER])
+  async getMonthlyHistory(
+    @RequestUser() user: Payload,
+    @Query('gender') gender?: Gender,
+  ): Promise<MonthlyHistoryDto[]> {
+    return this.service.getMonthlyHistory(user.id, gender);
+  }
+
+  @Get('summary')
+  @Roles([SystemRole.RESEARCHER, SystemRole.MANAGER])
+  async getDashboardSummary(
+    @RequestUser() user: Payload,
+    @Query('gender') gender?: Gender,
+  ): Promise<DashboardSummaryDto> {
+    return this.service.getDashboardSummary(user.id, gender);
+  }
+
+  @Get('current-month')
+  @Roles([SystemRole.RESEARCHER, SystemRole.MANAGER])
+  async getCurrentMonthEvaluations(
+    @RequestUser() user: Payload,
+    @Query('gender') gender?: Gender,
+  ): Promise<CurrentMonthEvaluationsDto> {
+    return this.service.getCurrentMonthEvaluations(user.id, gender);
+  }
+
+  @Get('by-test-and-gender')
+  @Roles([SystemRole.RESEARCHER, SystemRole.MANAGER])
+  async getEvaluationsByTestAndGender(
+    @RequestUser() user: Payload,
+    @Query('test') test?: TestType,
+    @Query('gender') gender?: Gender,
+  ): Promise<EvaluationsByTestAndGenderDto[]> {
+    return this.service.getEvaluationsByTestAndGender(user.id, test, gender);
+  }
+}
