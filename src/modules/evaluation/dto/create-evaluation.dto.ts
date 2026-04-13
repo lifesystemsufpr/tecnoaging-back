@@ -35,6 +35,7 @@ export class CreateSensorDataDto {
 const transformEvaluationType = ({ value }: { value: string }) => {
   if (value === '5TSTS') return 'FTSTS';
   if (value === '30TSTS') return 'TTSTS';
+  if (value === '2MSTS') return 'TMSTS';
   return value;
 };
 

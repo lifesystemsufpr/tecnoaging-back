@@ -303,7 +303,6 @@ export class EvaluationService extends BaseService<
         });
 
         if (result.detalhes_ciclos && result.detalhes_ciclos.length > 0) {
-
           await tx.evaluationCycle.createMany({
             data: result.detalhes_ciclos.map((c) => ({
               evaluationId,
@@ -920,7 +919,6 @@ export class EvaluationService extends BaseService<
     const evaluations = await this.prisma.evaluation.findMany({
       where: {
         participantId: participantId,
-        type: 'TTSTS',
         indicators: {
           isNot: null,
         },
