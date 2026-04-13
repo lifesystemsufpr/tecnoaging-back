@@ -10,7 +10,7 @@ export enum TestType {
   TUG = 'TUG',
   FTSTS = 'FTSTS', // 5 Times Sit to Stand Test
   TTSTS = 'TTSTS', // 30 Times Sit to Stand Test
-  TMSTS = 'TMSTS', // 2 Minute Sit to Stand Test
+  TMSTS = 'TMSTS', // 2 Minutes Step Test
 }
 
 // Reservado para uso futuro, se necessário filtros avançados
