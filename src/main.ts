@@ -19,12 +19,12 @@ import basicAuth = require('express-basic-auth');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const globalPrefix = "backend";
+  const globalPrefix = 'backend';
   app.setGlobalPrefix(globalPrefix);
   const logger = new Logger('AppInitializer');
 
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ limit: '50mb', extended: true }));
+  app.use(json({ limit: '500mb' }));
+  app.use(urlencoded({ limit: '500mb', extended: true }));
   app.use(cookieParser());
   logger.log('Starting application...');
 
@@ -49,7 +49,7 @@ async function bootstrap() {
   logger.log('Configs loaded...');
 
   if (swaggerConfig.enabled) {
-    logger.log("Swagger enabled");
+    logger.log('Swagger enabled');
 
     const swaggerPath = swaggerConfig.path;
     const swaggerRoutes = [
