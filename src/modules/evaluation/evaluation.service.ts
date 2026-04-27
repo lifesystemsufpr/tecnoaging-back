@@ -86,6 +86,41 @@ interface PythonResponse {
   timeseries_processada: ProcessedPoint[];
 }
 
+interface PythonMarchaStepDetail {
+  pico: number;
+  t_pico_s: number;
+  vel_bruta_deg_s: number;
+  vel_phoneX_deg_s: number;
+  vel_phoneY_deg_s: number | null;
+  vel_phoneZ_deg_s: number | null;
+  vel_calibrada_deg_s: number;
+}
+
+interface PythonMarchaResponse {
+  status: string;
+  metricas_globais: {
+    n_passos: number;
+    estrategia: string;
+    cadencia_ciclos_min: number;
+    vel_ini_deg_s: number | null;
+    vel_fim_deg_s: number | null;
+    delta_vel_deg_s: number | null;
+    slope_deg_s2: number | null;
+    vel_media_deg_s: number;
+    vel_dp_deg_s: number;
+    cv_vel: number;
+    vel_max_deg_s: number;
+    vel_min_deg_s: number;
+    tempo_medio_s: number | null;
+    tempo_dp_s: number | null;
+    cv_tempo: number | null;
+    tempo_max_s: number | null;
+    tempo_min_s: number | null;
+  };
+  detalhes_picos: PythonMarchaStepDetail[];
+  timeseries_processada: ProcessedPoint[];
+}
+
 type EvaluationQueryResult = Omit<
   Evaluation,
   'participantId' | 'healthProfessionalId' | 'healthcareUnitId'
@@ -229,99 +264,35 @@ export class EvaluationService extends BaseService<
       sex: string;
     },
   ) {
-    const rawData: SensorData[] = await this.prisma.sensorData.findMany({
-      where: {
-        evaluationId: evaluationId,
-        filtered: false,
-      },
-      orderBy: { timestamp: 'asc' },
-    });
+    const [rawData, evaluation] = await Promise.all([
+      this.prisma.sensorData.findMany({
+        where: { evaluationId, filtered: false },
+        orderBy: { timestamp: 'asc' },
+      }),
+      this.prisma.evaluation.findUniqueOrThrow({
+        where: { id: evaluationId },
+        select: { type: true },
+      }),
+    ]);
 
     if (!rawData.length) {
       throw new NotFoundException('No raw sensor data found.');
     }
 
-    const pythonPayload = {
-      date: new Date().toISOString(),
-      participantId: '',
-      participantInfo: {
-        max: userProfile.weight,
-        height: userProfile.height,
-        age: userProfile.age,
-        sex: userProfile.sex,
-      },
-      sensorData: rawData.map((d, i) => ({
-        accel_x: d.accel_x,
-        accel_y: d.accel_y,
-        accel_z: d.accel_z,
-        gyro_x: d.gyro_x,
-        gyro_y: d.gyro_y,
-        gyro_z: d.gyro_z,
-        timestamp: d.timestamp.toISOString(),
-      })),
-    };
+    const pythonUrl =
+      (process.env['PYTHON_SERVICE_URL'] as string) || 'http://localhost:8001';
 
     try {
-      const pythonUrl =
-        (process.env['PYTHON_SERVICE_URL'] as string) ||
-        'http://localhost:8001';
-
-      const { data: result } = await lastValueFrom(
-        this.httpService.post<PythonResponse>(
-          `${pythonUrl}/processar`,
-          pythonPayload,
-        ),
-      );
-
-      await this.prisma.$transaction(async (txArgument) => {
-        const tx = txArgument as PrismaClient;
-
-        const processedCurveJson =
-          result.timeseries_processada as unknown as Prisma.InputJsonValue;
-
-        await tx.evaluationIndicators.upsert({
-          where: { evaluationId },
-          update: {
-            repetitionCount: result.metricas_globais.repeticoes,
-            meanPower: result.metricas_globais.potencia_media_global,
-            totalEnergy: result.metricas_globais.energia_total,
-            classification: result.metricas_globais.classificacao,
-            processedCurve: processedCurveJson,
-          },
-          create: {
-            evaluationId,
-            repetitionCount: result.metricas_globais.repeticoes,
-            meanPower: result.metricas_globais.potencia_media_global,
-            totalEnergy: result.metricas_globais.energia_total,
-            classification: result.metricas_globais.classificacao,
-            processedCurve: processedCurveJson,
-          },
-        });
-
-        await tx.evaluationCycle.deleteMany({
-          where: { evaluationId },
-        });
-
-        if (result.detalhes_ciclos && result.detalhes_ciclos.length > 0) {
-          await tx.evaluationCycle.createMany({
-            data: result.detalhes_ciclos.map((c) => ({
-              evaluationId,
-              cycleNumber: c.Ciclo,
-              totalTime: c['Tempo total Celular'],
-              standUpTime: c['Tempo levantar Celular'],
-              sitDownTime: c['Tempo sentar Celular'],
-              frequency: c['Frequência Celular'],
-              meanPower: c['Potência média ciclo (J/s)'],
-              extensionVel: c['Vel. extensão levantar Celular'],
-              flexionVel: c['Vel. flexão sentar Celular'],
-              peak1Val: c['Valor Pico 1 Celular'],
-              peak2Val: c['Valor Pico 2 Celular'],
-            })),
-          });
-        }
-      });
-
-      return result.metricas_globais;
+      if (evaluation.type === 'TMSTS') {
+        await this._processMarchaData(evaluationId, rawData, pythonUrl);
+      } else {
+        await this._processSTSData(
+          evaluationId,
+          rawData,
+          userProfile,
+          pythonUrl,
+        );
+      }
     } catch (error: unknown) {
       this.logger.error(
         'Error communicating with Python service',
@@ -332,6 +303,159 @@ export class EvaluationService extends BaseService<
       }
       throw new Error('Failed to process biomechanical data.');
     }
+  }
+
+  private async _processSTSData(
+    evaluationId: string,
+    rawData: SensorData[],
+    userProfile: { weight: number; height: number; age: number; sex: string },
+    pythonUrl: string,
+  ) {
+    const pythonPayload = {
+      date: new Date().toISOString(),
+      participantId: '',
+      participantInfo: {
+        max: userProfile.weight,
+        height: userProfile.height,
+        age: userProfile.age,
+        sex: userProfile.sex,
+      },
+      sensorData: rawData.map((d) => ({
+        accel_x: d.accel_x,
+        accel_y: d.accel_y,
+        accel_z: d.accel_z,
+        gyro_x: d.gyro_x,
+        gyro_y: d.gyro_y,
+        gyro_z: d.gyro_z,
+        timestamp: d.timestamp.toISOString(),
+      })),
+    };
+
+    const { data: result } = await lastValueFrom(
+      this.httpService.post<PythonResponse>(`${pythonUrl}/processar`, pythonPayload),
+    );
+
+    await this.prisma.$transaction(async (txArgument) => {
+      const tx = txArgument as PrismaClient;
+
+      const processedCurveJson =
+        result.timeseries_processada as unknown as Prisma.InputJsonValue;
+
+      await tx.evaluationIndicators.upsert({
+        where: { evaluationId },
+        update: {
+          repetitionCount: result.metricas_globais.repeticoes,
+          meanPower: result.metricas_globais.potencia_media_global,
+          totalEnergy: result.metricas_globais.energia_total,
+          classification: result.metricas_globais.classificacao,
+          processedCurve: processedCurveJson,
+        },
+        create: {
+          evaluationId,
+          repetitionCount: result.metricas_globais.repeticoes,
+          meanPower: result.metricas_globais.potencia_media_global,
+          totalEnergy: result.metricas_globais.energia_total,
+          classification: result.metricas_globais.classificacao,
+          processedCurve: processedCurveJson,
+        },
+      });
+
+      await tx.evaluationCycle.deleteMany({ where: { evaluationId } });
+
+      if (result.detalhes_ciclos && result.detalhes_ciclos.length > 0) {
+        await tx.evaluationCycle.createMany({
+          data: result.detalhes_ciclos.map((c) => ({
+            evaluationId,
+            cycleNumber: c.Ciclo,
+            totalTime: c['Tempo total Celular'],
+            standUpTime: c['Tempo levantar Celular'],
+            sitDownTime: c['Tempo sentar Celular'],
+            frequency: c['Frequência Celular'],
+            meanPower: c['Potência média ciclo (J/s)'],
+            extensionVel: c['Vel. extensão levantar Celular'],
+            flexionVel: c['Vel. flexão sentar Celular'],
+            peak1Val: c['Valor Pico 1 Celular'],
+            peak2Val: c['Valor Pico 2 Celular'],
+          })),
+        });
+      }
+    });
+
+    return result.metricas_globais;
+  }
+
+  private async _processMarchaData(
+    evaluationId: string,
+    rawData: SensorData[],
+    pythonUrl: string,
+  ) {
+    const marchaSensorData = rawData.map((d) => ({
+      timestamp: d.timestamp.toISOString(),
+      gyro_x: d.gyro_x,
+      gyro_y: d.gyro_y,
+      gyro_z: d.gyro_z,
+    }));
+
+    const { data: result } = await lastValueFrom(
+      this.httpService.post<PythonMarchaResponse>(
+        `${pythonUrl}/processar-marcha`,
+        { sensorData: marchaSensorData },
+      ),
+    );
+
+    const g = result.metricas_globais;
+
+    // Store full result in processedCurve; map main stats to indicator scalar fields
+    const processedCurveJson = {
+      timeseries: result.timeseries_processada,
+      metricas: g,
+      picos: result.detalhes_picos,
+    } as unknown as Prisma.InputJsonValue;
+
+    await this.prisma.$transaction(async (txArgument) => {
+      const tx = txArgument as PrismaClient;
+
+      await tx.evaluationIndicators.upsert({
+        where: { evaluationId },
+        update: {
+          repetitionCount: g.n_passos,
+          meanPower: g.vel_media_deg_s,
+          totalEnergy: g.cadencia_ciclos_min,
+          classification: g.estrategia,
+          processedCurve: processedCurveJson,
+        },
+        create: {
+          evaluationId,
+          repetitionCount: g.n_passos,
+          meanPower: g.vel_media_deg_s,
+          totalEnergy: g.cadencia_ciclos_min,
+          classification: g.estrategia,
+          processedCurve: processedCurveJson,
+        },
+      });
+
+      await tx.evaluationCycle.deleteMany({ where: { evaluationId } });
+
+      if (result.detalhes_picos.length > 0) {
+        await tx.evaluationCycle.createMany({
+          data: result.detalhes_picos.map((p) => ({
+            evaluationId,
+            cycleNumber: p.pico,
+            totalTime: p.t_pico_s,
+            standUpTime: 0,
+            sitDownTime: 0,
+            frequency: 0,
+            meanPower: p.vel_calibrada_deg_s,
+            extensionVel: p.vel_bruta_deg_s,
+            flexionVel: 0,
+            peak1Val: p.vel_calibrada_deg_s,
+            peak2Val: null,
+          })),
+        });
+      }
+    });
+
+    return g;
   }
 
   async findOne(id: string): Promise<EvaluationResponse> {
