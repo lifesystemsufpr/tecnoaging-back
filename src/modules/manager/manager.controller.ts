@@ -42,26 +42,6 @@ export class ManagerController {
     return this.managerService.findAll(queryDto);
   }
 
-  @Get(':id')
-  @Roles([SystemRole.MANAGER])
-  findById(@Param('id') id: string) {
-    return this.managerService.findOne(id);
-  }
-
-  @Patch(':id')
-  @Roles([SystemRole.MANAGER])
-  @ApiNoContentResponse()
-  update(@Param('id') id: string, @Body() updateManagerDto: UpdateManagerDto) {
-    return this.managerService.update(id, updateManagerDto);
-  }
-
-  @Delete(':id')
-  @Roles([SystemRole.MANAGER])
-  @ApiNoContentResponse()
-  remove(@Param('id') id: string) {
-    return this.managerService.remove(id);
-  }
-
   @Get('profile')
   @Roles([SystemRole.MANAGER])
   @ApiOperation({
@@ -93,5 +73,25 @@ export class ManagerController {
     @Body() updateManagerProfileDto: UpdateManagerProfileDto,
   ): Promise<ManagerProfileDto> {
     return this.managerService.updateProfile(user.id, updateManagerProfileDto);
+  }
+
+  @Get(':id')
+  @Roles([SystemRole.MANAGER])
+  findById(@Param('id') id: string) {
+    return this.managerService.findOne(id);
+  }
+
+  @Patch(':id')
+  @Roles([SystemRole.MANAGER])
+  @ApiNoContentResponse()
+  update(@Param('id') id: string, @Body() updateManagerDto: UpdateManagerDto) {
+    return this.managerService.update(id, updateManagerDto);
+  }
+
+  @Delete(':id')
+  @Roles([SystemRole.MANAGER])
+  @ApiNoContentResponse()
+  remove(@Param('id') id: string) {
+    return this.managerService.remove(id);
   }
 }
