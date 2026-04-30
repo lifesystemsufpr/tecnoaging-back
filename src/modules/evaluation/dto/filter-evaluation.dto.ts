@@ -40,7 +40,7 @@ export class FilterEvaluationDto extends QueryDto {
   @ApiProperty({
     required: false,
     enum: TypeEvaluation,
-    description: 'Tipo de avaliação (FTSTS ou TTSTS)',
+    description: 'Tipo de avaliação (FTSTS, TTSTS ou TMSTS)',
   })
   @IsOptional()
   @IsEnum(TypeEvaluation)

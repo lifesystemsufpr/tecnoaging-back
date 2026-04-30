@@ -33,7 +33,6 @@ export class DashboardAdvancedRepository {
       JOIN "participant" p ON e."participantId" = p.id
       JOIN "user" u ON p.id = u.id
       WHERE e."healthProfessionalId" = ${healthProfessionalId}
-        AND e.type = 'TTSTS'
         ${gender ? Prisma.sql`AND u.gender = ${gender}` : Prisma.empty}
       GROUP BY age_group
       ORDER BY age_group;

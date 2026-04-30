@@ -54,7 +54,9 @@ export class DashboardService {
       await this.repository.getMostPerformedTestsByParticipant(participantId);
 
     const testNames: Record<string, string> = {
+      FTSTS: 'FTSTS (5 Times Sit to Stand Test)',
       TTSTS: 'TTSTS (30 Times Sit to Stand Test)',
+      TMSTS: 'TMSTS (2 Minutes Step Test )',
     };
 
     const total = testResults.reduce(
@@ -178,11 +180,18 @@ export class DashboardService {
 
     const averageDuration = evaluations?.average_duration || 0;
     const evaluationCount = Number(evaluations?.count || 0);
+    const evaluationType = evaluations?.type || 'TTSTS';
+
+    const testNames: Record<string, string> = {
+      FTSTS: 'FTSTS (5 Times Sit to Stand Test)',
+      TTSTS: 'TTSTS (30 Times Sit to Stand Test)',
+      TMSTS: 'TMSTS (2 Minutes Step Test )',
+    };
 
     const evaluationTypes = [
       {
-        type: 'TTSTS',
-        fullName: 'TTSTS (30 Times Sit to Stand Test)',
+        type: evaluationType,
+        fullName: testNames[evaluationType] || evaluationType,
         averageDuration,
         unit: 'seconds' as const,
         count: evaluationCount,
@@ -190,7 +199,7 @@ export class DashboardService {
     ];
 
     return {
-      subtitle: 'TTSTS em segundos',
+      subtitle: `${evaluationType} em segundos`,
       evaluationTypes,
       overallAverage: averageDuration,
       month: currentDate.getMonth() + 1,

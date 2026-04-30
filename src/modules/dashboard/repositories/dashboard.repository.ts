@@ -143,15 +143,20 @@ export class DashboardRepository {
       Array<{
         average_duration: number;
         count: bigint;
+        type: string;
       }>
     >`
       SELECT
         ROUND(AVG(EXTRACT(EPOCH FROM ("time_end" - "time_init")))) as average_duration,
-        COUNT(*) as count
+        COUNT(*) as count,
+        type
       FROM "evaluation"
       WHERE "participantId" = ${participantId}
         AND date >= ${monthStart}
         AND date <= ${monthEnd}
+      GROUP BY type
+      ORDER BY count DESC
+      LIMIT 1
     `;
 
     return result[0];

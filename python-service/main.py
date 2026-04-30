@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from typing import Dict, Any
 import uvicorn
+from marcha_processor import MarchaProcessor
 
 app = FastAPI()
 
@@ -453,6 +454,24 @@ def processar_sts(payload: Dict[str, Any]):
       "detalhes_ciclos": df_out.to_dict(orient='records'),
       "timeseries_processada": timeseries_out
     }
+
+  except Exception as e:
+    import traceback
+    traceback.print_exc()
+    raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/processar-marcha")
+def processar_marcha(payload: Dict[str, Any]):
+  try:
+    corte_s   = payload.get("corte_s", 0.0)
+    sensor_data = payload.get("sensorData", [])
+
+    if not sensor_data:
+      raise ValueError("sensorData is empty.")
+
+    processor = MarchaProcessor(sensor_data, corte_s=corte_s)
+    return processor.run()
 
   except Exception as e:
     import traceback
