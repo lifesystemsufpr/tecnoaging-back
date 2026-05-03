@@ -15,23 +15,32 @@ export enum TestType {
 
 // Reservado para uso futuro, se necessário filtros avançados
 
-export class AverageTestByAgeGroupDto {
-  @ApiProperty()
-  ageGroup: string;
-  @ApiProperty()
-  count: number;
-  @ApiProperty()
-  average: number;
-  @ApiProperty()
-  min: number;
-  @ApiProperty()
-  q1: number;
-  @ApiProperty()
-  median: number;
-  @ApiProperty()
-  q3: number;
-  @ApiProperty()
-  max: number;
+export type AgeGroup = '70-74' | '75-79' | '80-84' | '85-89' | '≥90';
+
+export const AGE_GROUPS: AgeGroup[] = [
+  '70-74',
+  '75-79',
+  '80-84',
+  '85-89',
+  '≥90',
+];
+
+export const PERCENTILES = [5, 25, 50, 75, 95] as const;
+
+export class PercentileEntryDto {
+  @ApiProperty({ enum: PERCENTILES })
+  percentile: number;
+  @ApiProperty({
+    type: Object,
+    example: {
+      '70-74': 25,
+      '75-79': 24,
+      '80-84': 22,
+      '85-89': 20,
+      '≥90': 19,
+    },
+  })
+  values: Record<AgeGroup, number>;
 }
 
 export class MonthlyHistoryDto {

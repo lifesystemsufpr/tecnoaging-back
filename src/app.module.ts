@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import appConfig from './shared/config/app.config';
 import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,6 +27,7 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
       envFilePath: ['.env.local', '.env'],
       load: [appConfig],
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     SharedModule,
     AuthModule,

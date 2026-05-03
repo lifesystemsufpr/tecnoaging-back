@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AccessToken, JwtPayload, Payload } from './interfaces/auth.interface';
-import { User } from '@prisma/client';
+import { SystemRole, User } from '@prisma/client';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import {
   comparePassword,
@@ -65,6 +65,13 @@ export class AuthService {
         throw new ForbiddenException({
           debug_error: 'USUARIO_INATIVO',
           message: 'Conta desativada',
+        });
+      }
+
+      if (user.role === SystemRole.PARTICIPANT) {
+        throw new ForbiddenException({
+          debug_error: 'PARTICIPANT_LOGIN_BLOCKED',
+          message: 'Participantes não possuem acesso ao sistema.',
         });
       }
 
