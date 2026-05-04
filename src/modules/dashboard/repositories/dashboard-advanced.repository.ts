@@ -7,11 +7,8 @@ import { Prisma } from '@prisma/client';
 export class DashboardAdvancedRepository {
   constructor(private prisma: PrismaService) {}
 
-  async getAverageTestByAgeGroup(
-    healthProfessionalId: string,
-    gender?: Gender,
-  ) {
-    // Query para box plot 30STS por faixa etária
+  async getAverageTestByAgeGroup(gender?: Gender) {
+    // Box plot 30STS (TTSTS) por faixa etária — escopo populacional
     return this.prisma.$queryRaw<any[]>`
       SELECT
         CASE
@@ -19,20 +16,20 @@ export class DashboardAdvancedRepository {
           WHEN (EXTRACT(YEAR FROM AGE(p."birthday")) BETWEEN 75 AND 79) THEN '75-79'
           WHEN (EXTRACT(YEAR FROM AGE(p."birthday")) BETWEEN 80 AND 84) THEN '80-84'
           WHEN (EXTRACT(YEAR FROM AGE(p."birthday")) BETWEEN 85 AND 89) THEN '85-89'
-          ELSE '>=90'
+          ELSE '≥90'
         END as age_group,
         COUNT(*) as count,
-        AVG(ei."repetitionCount")::float as average,
-        MIN(ei."repetitionCount") as min,
-        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY ei."repetitionCount") as q1,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ei."repetitionCount") as median,
-        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY ei."repetitionCount") as q3,
-        MAX(ei."repetitionCount") as max
+        PERCENTILE_CONT(0.05) WITHIN GROUP (ORDER BY ei."repetitionCount") as p5,
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY ei."repetitionCount") as p25,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ei."repetitionCount") as p50,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY ei."repetitionCount") as p75,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ei."repetitionCount") as p95
       FROM "evaluation" e
       JOIN "evaluation_indicators" ei ON e.id = ei."evaluationId"
       JOIN "participant" p ON e."participantId" = p.id
       JOIN "user" u ON p.id = u.id
-      WHERE e."healthProfessionalId" = ${healthProfessionalId}
+      WHERE e.type = 'TTSTS'
+        AND ei."repetitionCount" IS NOT NULL
         ${gender ? Prisma.sql`AND u.gender = ${gender}` : Prisma.empty}
       GROUP BY age_group
       ORDER BY age_group;

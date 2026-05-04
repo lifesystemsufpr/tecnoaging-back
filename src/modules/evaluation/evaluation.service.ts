@@ -305,6 +305,61 @@ export class EvaluationService extends BaseService<
     }
   }
 
+  async processPendingEvaluations(): Promise<{
+    processed: number;
+    failed: number;
+    skipped: number;
+  }> {
+    const pending = await this.prisma.evaluation.findMany({
+      where: {
+        indicators: { is: null },
+        sensorData: { some: { filtered: false } },
+      },
+      include: {
+        participant: { include: { user: true } },
+      },
+    });
+
+    let processed = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const evaluation of pending) {
+      const age = this.calculateAge(
+        evaluation.participant.birthday,
+        new Date(),
+      );
+
+      const userProfile = {
+        weight: evaluation.participant.weight,
+        height: evaluation.participant.height,
+        sex: evaluation.participant.user.gender,
+        age,
+      };
+
+      try {
+        await this.processEvaluationData(evaluation.id, userProfile);
+        processed++;
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          skipped++;
+          continue;
+        }
+        failed++;
+        this.logger.error(
+          `Failed to reprocess pending evaluation ${evaluation.id}`,
+          err,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Pending evaluations batch finished — processed=${processed} failed=${failed} skipped=${skipped} total=${pending.length}`,
+    );
+
+    return { processed, failed, skipped };
+  }
+
   private async _processSTSData(
     evaluationId: string,
     rawData: SensorData[],
@@ -379,6 +434,11 @@ export class EvaluationService extends BaseService<
           })),
         });
       }
+
+      await tx.sensorData.updateMany({
+        where: { evaluationId, filtered: false },
+        data: { filtered: true },
+      });
     });
 
     return result.metricas_globais;
@@ -453,6 +513,11 @@ export class EvaluationService extends BaseService<
           })),
         });
       }
+
+      await tx.sensorData.updateMany({
+        where: { evaluationId, filtered: false },
+        data: { filtered: true },
+      });
     });
 
     return g;
@@ -475,7 +540,6 @@ export class EvaluationService extends BaseService<
       where: { id },
       include: {
         sensorData: {
-          where: { filtered: false },
           orderBy: { timestamp: 'asc' },
         },
         indicators: true,
