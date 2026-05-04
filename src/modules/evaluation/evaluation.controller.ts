@@ -24,6 +24,7 @@ import {
   CurrentMonthByGenderResponseDto,
   DashboardSummaryResponseDto,
   MonthlyHistoryResponseDto,
+  ProfessionalMobileSummaryResponseDto,
   TeamPerformanceResponseDto,
 } from './dto/dashboard/dashboard-response.dto';
 
@@ -71,6 +72,13 @@ export class EvaluationController {
   @ApiOkResponse({ type: DashboardSummaryResponseDto })
   getDashboardSummary(@RequestUser() user: Payload) {
     return this.evaluationService.getDashboardSummary(user.id);
+  }
+
+  @Get('dashboard/professional-mobile-summary')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  @ApiOkResponse({ type: ProfessionalMobileSummaryResponseDto })
+  getProfessionalMobileSummary(@RequestUser() user: Payload) {
+    return this.evaluationService.getProfessionalMobileSummary(user.id);
   }
 
   @Get(':id')

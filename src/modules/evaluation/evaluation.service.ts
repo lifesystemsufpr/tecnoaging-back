@@ -24,16 +24,20 @@ import {
   CurrentMonthByGenderResponseDto,
   DashboardSummaryResponseDto,
   MonthlyHistoryResponseDto,
+  ProfessionalMobileSummaryResponseDto,
   TeamPerformanceResponseDto,
 } from './dto/dashboard/dashboard-response.dto';
 import { DASHBOARD_TIMEZONE, MONTH_LABELS_PT_BR } from './constants';
 import {
   buildMonthKey,
   calculateAverageCount,
+  computePercentageChange,
+  computeTrend,
   getCurrentMonthAndYear,
   getCurrentMonthRangeUtc,
   getLastTwelveMonths,
   getMonthStartUtc,
+  getPreviousMonthRangeUtc,
 } from './utils/dashboard.utils';
 
 // --- TIPAGENS AUXILIARES ---
@@ -1089,6 +1093,141 @@ export class EvaluationService extends BaseService<
       currentMonthByGender,
       teamPerformance,
       monthlyHistory,
+    };
+  }
+
+  async getProfessionalMobileSummary(
+    healthProfessionalId: string,
+  ): Promise<ProfessionalMobileSummaryResponseDto> {
+    await this.ensureHealthProfessionalExists(healthProfessionalId);
+
+    const { startUtc: curStart, endUtc: curEnd } =
+      getCurrentMonthRangeUtc(DASHBOARD_TIMEZONE);
+    const { startUtc: prevStart, endUtc: prevEnd } =
+      getPreviousMonthRangeUtc(DASHBOARD_TIMEZONE);
+    const { month, year } = getCurrentMonthAndYear(DASHBOARD_TIMEZONE);
+
+    const [monthlyHistory, currentCount, previousCount, allEvaluations, unitRows] =
+      await Promise.all([
+        this.getMonthlyHistory(healthProfessionalId),
+        this.prisma.evaluation.count({
+          where: {
+            healthProfessionalId,
+            date: { gte: curStart, lt: curEnd },
+          },
+        }),
+        this.prisma.evaluation.count({
+          where: {
+            healthProfessionalId,
+            date: { gte: prevStart, lt: prevEnd },
+          },
+        }),
+        this.prisma.evaluation.findMany({
+          where: { healthProfessionalId },
+          select: {
+            participant: {
+              select: { user: { select: { gender: true } } },
+            },
+          },
+        }),
+        this.prisma.evaluation.findMany({
+          where: { healthProfessionalId },
+          select: { healthcareUnitId: true },
+          distinct: ['healthcareUnitId'],
+        }),
+      ]);
+
+    const unitIds = unitRows.map((r) => r.healthcareUnitId);
+
+    const [curTeamGroups, prevTeamGroups] = await Promise.all([
+      unitIds.length
+        ? this.prisma.evaluation.groupBy({
+            by: ['healthProfessionalId'],
+            where: {
+              healthcareUnitId: { in: unitIds },
+              date: { gte: curStart, lt: curEnd },
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]),
+      unitIds.length
+        ? this.prisma.evaluation.groupBy({
+            by: ['healthProfessionalId'],
+            where: {
+              healthcareUnitId: { in: unitIds },
+              date: { gte: prevStart, lt: prevEnd },
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    // averages.global
+    const globalCurrent = calculateAverageCount(
+      curTeamGroups.map((g) => g._count._all),
+    );
+    const globalPrevious = calculateAverageCount(
+      prevTeamGroups.map((g) => g._count._all),
+    );
+    const globalPctChange = computePercentageChange(globalCurrent, globalPrevious);
+
+    // averages.individual — média dos últimos 12 meses usando monthlyHistory
+    const individualMonthlyAvg = calculateAverageCount(
+      monthlyHistory.data.map((d) => d.total),
+    );
+    const individualPctChange = computePercentageChange(
+      currentCount,
+      individualMonthlyAvg,
+    );
+
+    // gender distribution — todo o período
+    let male = 0;
+    let female = 0;
+    for (const ev of allEvaluations) {
+      const gender = ev.participant.user.gender;
+      if (gender === 'MALE') male++;
+      else if (gender === 'FEMALE') female++;
+    }
+    const total = allEvaluations.length;
+    const malePercentage =
+      total > 0 ? Number(((male / total) * 100).toFixed(1)) : 0;
+    const femalePercentage =
+      total > 0 ? Number(((female / total) * 100).toFixed(1)) : 0;
+
+    const evaluationsPctChange = computePercentageChange(
+      currentCount,
+      previousCount,
+    );
+
+    return {
+      evaluations: {
+        currentMonth: currentCount,
+        previousMonth: previousCount,
+        percentageChange: evaluationsPctChange,
+        month,
+        year,
+        timezone: DASHBOARD_TIMEZONE,
+      },
+      averages: {
+        global: {
+          value: globalCurrent,
+          percentageChange: globalPctChange,
+          trend: computeTrend(globalPctChange),
+        },
+        individual: {
+          value: individualMonthlyAvg,
+          percentageChange: individualPctChange,
+          trend: computeTrend(individualPctChange),
+        },
+      },
+      monthlyHistory,
+      genderDistribution: {
+        total,
+        male,
+        malePercentage,
+        female,
+        femalePercentage,
+      },
     };
   }
 
