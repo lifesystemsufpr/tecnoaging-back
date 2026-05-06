@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   Evaluation,
@@ -170,6 +175,7 @@ export class EvaluationService extends BaseService<
   EvaluationResponse
 > {
   private readonly logger = new Logger(EvaluationService.name);
+  private readonly processingIds = new Set<string>();
 
   constructor(
     protected readonly prisma: PrismaService,
@@ -362,6 +368,58 @@ export class EvaluationService extends BaseService<
     );
 
     return { processed, failed, skipped };
+  }
+
+  async processPendingEvaluationById(id: string): Promise<{
+    status: 'PROCESSED';
+    evaluationId: string;
+  }> {
+    if (this.processingIds.has(id)) {
+      throw new ConflictException(
+        'Evaluation is already being processed.',
+      );
+    }
+
+    this.processingIds.add(id);
+    this.logger.log(`Manual processing requested for evaluation ${id}.`);
+
+    try {
+      const evaluation = await this.prisma.evaluation.findFirst({
+        where: {
+          id,
+          sensorData: { some: { filtered: false } },
+        },
+        include: {
+          participant: { include: { user: true } },
+        },
+      });
+
+      if (!evaluation) {
+        throw new NotFoundException(
+          'Evaluation not found or has no pending sensor data to process.',
+        );
+      }
+
+      const age = this.calculateAge(
+        evaluation.participant.birthday,
+        new Date(),
+      );
+
+      const userProfile = {
+        weight: evaluation.participant.weight,
+        height: evaluation.participant.height,
+        sex: evaluation.participant.user.gender,
+        age,
+      };
+
+      await this.processEvaluationData(evaluation.id, userProfile);
+
+      this.logger.log(`Manual processing finished for evaluation ${id}.`);
+
+      return { status: 'PROCESSED', evaluationId: id };
+    } finally {
+      this.processingIds.delete(id);
+    }
   }
 
   private async _processSTSData(

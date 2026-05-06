@@ -11,8 +11,10 @@ import { EvaluationService } from './evaluation.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiNoContentResponse,
   ApiCreatedResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -97,6 +99,20 @@ export class EvaluationController {
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   async findOneDetailed(@Param('id') id: string) {
     return this.evaluationService.findOneDetailed(id);
+  }
+
+  @Post(':id/process-pending')
+  @Roles([SystemRole.MANAGER, SystemRole.RESEARCHER])
+  @ApiOkResponse()
+  @ApiNotFoundResponse({
+    description:
+      'Evaluation not found or has no pending sensor data to process.',
+  })
+  @ApiConflictResponse({
+    description: 'Evaluation is already being processed.',
+  })
+  processPending(@Param('id') id: string) {
+    return this.evaluationService.processPendingEvaluationById(id);
   }
 
   @Delete(':id')
