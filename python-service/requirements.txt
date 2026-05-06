@@ -6,3 +6,4 @@ scipy
 ahrs
 pydantic
 joblib
+sklearn
