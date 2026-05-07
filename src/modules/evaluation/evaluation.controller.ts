@@ -11,10 +11,13 @@ import { EvaluationService } from './evaluation.service';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiNoContentResponse,
   ApiCreatedResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
@@ -30,6 +33,7 @@ import {
 
 @Controller('evaluation')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class EvaluationController {
   constructor(private readonly evaluationService: EvaluationService) {}
 
@@ -97,6 +101,20 @@ export class EvaluationController {
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   async findOneDetailed(@Param('id') id: string) {
     return this.evaluationService.findOneDetailed(id);
+  }
+
+  @Post(':id/process-pending')
+  @Roles([SystemRole.MANAGER, SystemRole.RESEARCHER])
+  @ApiOkResponse()
+  @ApiNotFoundResponse({
+    description:
+      'Evaluation not found or has no pending sensor data to process.',
+  })
+  @ApiConflictResponse({
+    description: 'Evaluation is already being processed.',
+  })
+  processPending(@Param('id') id: string) {
+    return this.evaluationService.processPendingEvaluationById(id);
   }
 
   @Delete(':id')

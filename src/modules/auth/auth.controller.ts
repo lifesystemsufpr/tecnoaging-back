@@ -18,8 +18,10 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { ApiBody } from '@nestjs/swagger';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('auth')
+@ApiStandardErrors()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,

@@ -1,6 +1,11 @@
 import { AppModule } from './app.module';
 import { json, urlencoded } from 'express';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  Logger,
+  ValidationError,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { setupSwagger } from './shared/config/swagger.config';
 import { NestFactory } from '@nestjs/core';
@@ -9,13 +14,33 @@ import {
   NestConfig,
   SwaggerConfig,
 } from './shared/config/config.interface';
-import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-client-exception.filter';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import cookieParser = require('cookie-parser');
 import { NormalizationPipe } from './shared/pipes/normalization.pipe';
-import { HttpAdapterHost } from '@nestjs/core';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import basicAuth = require('express-basic-auth');
+
+interface FlatValidationField {
+  field: string;
+  constraints: Record<string, string>;
+}
+
+function flattenValidationErrors(
+  errors: ValidationError[],
+  parent = '',
+): FlatValidationField[] {
+  const out: FlatValidationField[] = [];
+  for (const err of errors) {
+    const field = parent ? `${parent}.${err.property}` : err.property;
+    if (err.constraints) {
+      out.push({ field, constraints: err.constraints });
+    }
+    if (err.children?.length) {
+      out.push(...flattenValidationErrors(err.children, field));
+    }
+  }
+  return out;
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,13 +55,22 @@ async function bootstrap() {
 
   // Validation
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      exceptionFactory: (errors: ValidationError[]) => {
+        const fields = flattenValidationErrors(errors);
+        const messages = fields.flatMap((f) =>
+          Object.values(f.constraints ?? {}),
+        );
+        return new BadRequestException({
+          message: messages,
+          details: { fields },
+        });
+      },
+    }),
     new NormalizationPipe(),
   );
-
-  const { httpAdapter } = app.get(HttpAdapterHost);
-
-  app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
 
   // enable shutdown hook
   app.enableShutdownHooks();

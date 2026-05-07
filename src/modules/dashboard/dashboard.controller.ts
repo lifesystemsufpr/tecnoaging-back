@@ -13,9 +13,11 @@ import {
 import { RoleGuard } from '../auth/guards/role-guard.guard';
 import { Payload } from '../auth/interfaces/auth.interface';
 import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RoleGuard)
+@ApiStandardErrors()
 export class DashboardController {
   constructor(private dashboardService: DashboardService) {}
 

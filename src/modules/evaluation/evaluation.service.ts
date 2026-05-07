@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   Evaluation,
@@ -170,6 +176,7 @@ export class EvaluationService extends BaseService<
   EvaluationResponse
 > {
   private readonly logger = new Logger(EvaluationService.name);
+  private readonly processingIds = new Set<string>();
 
   constructor(
     protected readonly prisma: PrismaService,
@@ -305,7 +312,9 @@ export class EvaluationService extends BaseService<
       if (isAxiosError(error) && error.response) {
         this.logger.error(JSON.stringify(error.response.data));
       }
-      throw new Error('Failed to process biomechanical data.');
+      throw new ServiceUnavailableException(
+        'Failed to process biomechanical data.',
+      );
     }
   }
 
@@ -364,6 +373,56 @@ export class EvaluationService extends BaseService<
     return { processed, failed, skipped };
   }
 
+  async processPendingEvaluationById(id: string): Promise<{
+    status: 'PROCESSED';
+    evaluationId: string;
+  }> {
+    if (this.processingIds.has(id)) {
+      throw new ConflictException('Evaluation is already being processed.');
+    }
+
+    this.processingIds.add(id);
+    this.logger.log(`Manual processing requested for evaluation ${id}.`);
+
+    try {
+      const evaluation = await this.prisma.evaluation.findFirst({
+        where: {
+          id,
+          sensorData: { some: { filtered: false } },
+        },
+        include: {
+          participant: { include: { user: true } },
+        },
+      });
+
+      if (!evaluation) {
+        throw new NotFoundException(
+          'Evaluation not found or has no pending sensor data to process.',
+        );
+      }
+
+      const age = this.calculateAge(
+        evaluation.participant.birthday,
+        new Date(),
+      );
+
+      const userProfile = {
+        weight: evaluation.participant.weight,
+        height: evaluation.participant.height,
+        sex: evaluation.participant.user.gender,
+        age,
+      };
+
+      await this.processEvaluationData(evaluation.id, userProfile);
+
+      this.logger.log(`Manual processing finished for evaluation ${id}.`);
+
+      return { status: 'PROCESSED', evaluationId: id };
+    } finally {
+      this.processingIds.delete(id);
+    }
+  }
+
   private async _processSTSData(
     evaluationId: string,
     rawData: SensorData[],
@@ -391,7 +450,10 @@ export class EvaluationService extends BaseService<
     };
 
     const { data: result } = await lastValueFrom(
-      this.httpService.post<PythonResponse>(`${pythonUrl}/processar`, pythonPayload),
+      this.httpService.post<PythonResponse>(
+        `${pythonUrl}/processar`,
+        pythonPayload,
+      ),
     );
 
     await this.prisma.$transaction(async (txArgument) => {
@@ -1107,35 +1169,40 @@ export class EvaluationService extends BaseService<
       getPreviousMonthRangeUtc(DASHBOARD_TIMEZONE);
     const { month, year } = getCurrentMonthAndYear(DASHBOARD_TIMEZONE);
 
-    const [monthlyHistory, currentCount, previousCount, allEvaluations, unitRows] =
-      await Promise.all([
-        this.getMonthlyHistory(healthProfessionalId),
-        this.prisma.evaluation.count({
-          where: {
-            healthProfessionalId,
-            date: { gte: curStart, lt: curEnd },
+    const [
+      monthlyHistory,
+      currentCount,
+      previousCount,
+      allEvaluations,
+      unitRows,
+    ] = await Promise.all([
+      this.getMonthlyHistory(healthProfessionalId),
+      this.prisma.evaluation.count({
+        where: {
+          healthProfessionalId,
+          date: { gte: curStart, lt: curEnd },
+        },
+      }),
+      this.prisma.evaluation.count({
+        where: {
+          healthProfessionalId,
+          date: { gte: prevStart, lt: prevEnd },
+        },
+      }),
+      this.prisma.evaluation.findMany({
+        where: { healthProfessionalId },
+        select: {
+          participant: {
+            select: { user: { select: { gender: true } } },
           },
-        }),
-        this.prisma.evaluation.count({
-          where: {
-            healthProfessionalId,
-            date: { gte: prevStart, lt: prevEnd },
-          },
-        }),
-        this.prisma.evaluation.findMany({
-          where: { healthProfessionalId },
-          select: {
-            participant: {
-              select: { user: { select: { gender: true } } },
-            },
-          },
-        }),
-        this.prisma.evaluation.findMany({
-          where: { healthProfessionalId },
-          select: { healthcareUnitId: true },
-          distinct: ['healthcareUnitId'],
-        }),
-      ]);
+        },
+      }),
+      this.prisma.evaluation.findMany({
+        where: { healthProfessionalId },
+        select: { healthcareUnitId: true },
+        distinct: ['healthcareUnitId'],
+      }),
+    ]);
 
     const unitIds = unitRows.map((r) => r.healthcareUnitId);
 
@@ -1149,7 +1216,7 @@ export class EvaluationService extends BaseService<
             },
             _count: { _all: true },
           })
-        : Promise.resolve([]),
+        : Promise.resolve<{ _count: { _all: number } }[]>([]),
       unitIds.length
         ? this.prisma.evaluation.groupBy({
             by: ['healthProfessionalId'],
@@ -1159,7 +1226,7 @@ export class EvaluationService extends BaseService<
             },
             _count: { _all: true },
           })
-        : Promise.resolve([]),
+        : Promise.resolve<{ _count: { _all: number } }[]>([]),
     ]);
 
     // averages.global
@@ -1169,7 +1236,10 @@ export class EvaluationService extends BaseService<
     const globalPrevious = calculateAverageCount(
       prevTeamGroups.map((g) => g._count._all),
     );
-    const globalPctChange = computePercentageChange(globalCurrent, globalPrevious);
+    const globalPctChange = computePercentageChange(
+      globalCurrent,
+      globalPrevious,
+    );
 
     // averages.individual — média dos últimos 12 meses usando monthlyHistory
     const individualMonthlyAvg = calculateAverageCount(
@@ -1180,7 +1250,7 @@ export class EvaluationService extends BaseService<
       individualMonthlyAvg,
     );
 
-    // gender distribution — todo o período
+    // gender distribution — período inteiro
     let male = 0;
     let female = 0;
     for (const ev of allEvaluations) {

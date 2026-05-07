@@ -24,9 +24,11 @@ import { ManagerProfileDto } from './dto/manager-profile.dto';
 import { QueryDto } from 'src/shared/dto/query.dto';
 import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { Payload } from '../auth/interfaces/auth.interface';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('manager')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class ManagerController {
   constructor(private readonly managerService: ManagerService) {}
 

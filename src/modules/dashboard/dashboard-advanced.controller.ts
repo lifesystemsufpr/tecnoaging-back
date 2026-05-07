@@ -15,9 +15,11 @@ import {
   PercentileEntryDto,
   TestType,
 } from './dto/dashboard-advanced.dto';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('dashboard/advanced')
 @UseGuards(JwtAuthGuard, RoleGuard)
+@ApiStandardErrors()
 export class DashboardAdvancedController {
   constructor(private service: DashboardAdvancedService) {}
 
