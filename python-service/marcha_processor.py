@@ -197,10 +197,10 @@ class MarchaProcessor:
         # Convert timestamp to seconds float
         if "ts" not in df.columns:
             raise ValueError("Timestamp column not found in input data.")
-        if df["ts"].dtype == object:
+        if df["ts"].dtype == object or pd.api.types.is_string_dtype(df["ts"]):
             try:
-                df["ts"] = pd.to_datetime(df["ts"])
-                df["ts"] = (df["ts"] - df["ts"].iloc[0]).dt.total_seconds()
+                parsed = pd.to_datetime(df["ts"], utc=True)
+                df["ts"] = (parsed - parsed.iloc[0]).dt.total_seconds()
             except Exception:
                 df["ts"] = np.arange(len(df)) / self.FS
 
