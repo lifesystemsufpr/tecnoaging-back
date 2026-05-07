@@ -258,7 +258,13 @@ class MarchaProcessor:
             det_sig, self.FS, self.PEAK_MODE, self.PEAK_HEIGHT, self.PEAK_PROM, self.MIN_DIST_S
         )
         if idx_full.size == 0:
-            raise ValueError("No peaks detected in the signal.")
+            raise ValueError(
+                f"No peaks detected in the signal. "
+                f"Signal max={float(det_sig.max()):.1f} deg/s, "
+                f"threshold={self.PEAK_HEIGHT} deg/s, "
+                f"duration={float(t_rel[-1]):.1f}s, "
+                f"n_samples={len(det_sig)}"
+            )
 
         first_peak = int(idx_full[0])
         pre_win = int(round(2.0 * self.FS))
