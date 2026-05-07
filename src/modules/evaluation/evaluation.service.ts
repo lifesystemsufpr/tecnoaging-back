@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
@@ -311,7 +312,9 @@ export class EvaluationService extends BaseService<
       if (isAxiosError(error) && error.response) {
         this.logger.error(JSON.stringify(error.response.data));
       }
-      throw new Error('Failed to process biomechanical data.');
+      throw new ServiceUnavailableException(
+        'Failed to process biomechanical data.',
+      );
     }
   }
 

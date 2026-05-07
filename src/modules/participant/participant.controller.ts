@@ -16,8 +16,11 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { Public } from '../auth/decorators/public.decorator';
 import { QueryDto } from 'src/shared/dto/query.dto';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+
 @Controller('participant')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class ParticipantController {
   constructor(private readonly participantService: ParticipantService) {}
 

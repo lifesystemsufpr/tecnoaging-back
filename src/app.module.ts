@@ -17,7 +17,7 @@ import provideGlobalAppGuards from './modules/auth/providers/global-guards.provi
 import { ParticipantModule } from './modules/participant/participant.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { APP_FILTER } from '@nestjs/core';
-import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-client-exception.filter';
+import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
 
 @Module({
   imports: [
@@ -46,7 +46,7 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
     UserService,
     {
       provide: APP_FILTER,
-      useClass: PrismaClientExceptionFilter,
+      useClass: AllExceptionsFilter,
     },
   ],
 })

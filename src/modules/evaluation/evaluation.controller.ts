@@ -17,6 +17,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
 } from '@nestjs/swagger';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
@@ -32,6 +33,7 @@ import {
 
 @Controller('evaluation')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class EvaluationController {
   constructor(private readonly evaluationService: EvaluationService) {}
 
