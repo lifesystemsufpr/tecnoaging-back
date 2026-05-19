@@ -3,6 +3,8 @@ import { CreateHealthProfessionalDto } from './create-health-professional.dto';
 import { IsOptional, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { UpdateUserDto } from 'src/modules/users/dtos/update-user.dto';
+import { IsNotEmpty, IsString } from 'class-validator';
+
 
 class HealthProfessionalDataOnly extends OmitType(CreateHealthProfessionalDto, [
   'user',
@@ -14,4 +16,10 @@ export class UpdateHealthProfessionalDto extends PartialType(
   @ValidateNested()
   @Type(() => UpdateUserDto)
   user?: UpdateUserDto;
+}
+
+export class LinkParticipantDto {
+  @IsString()
+  @IsNotEmpty()
+  participantId: string;
 }
