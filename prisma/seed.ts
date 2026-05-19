@@ -1,50 +1,81 @@
 import {
   PrismaClient,
-  SystemRole,
-  Gender,
-  Scholarship,
-  SocialEconomicLevel,
-  TypeEvaluation,
   QuestionType,
 } from '@prisma/client';
-import { hashPassword } from '../src/shared/functions/hash-password'; // Ajuste o caminho conforme seu projeto
-import { normalizeString } from '../src/shared/functions/normalize-string'; // Ajuste o caminho conforme seu projeto
-import { fakerPT_BR as faker } from '@faker-js/faker';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({
+  connectionString,
+  max: 10,
+  idleTimeoutMillis: 30000,
+});
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   console.log('🌱 Iniciando o Seed Completo...');
 
   // ==================================================
-  // 1. LIMPEZA (Ordem importa por causa das FKs)
+  // 1. LIMPEZA DO IVCF-20 (Ordem importa por causa das FKs)
   // ==================================================
-  console.log('🗑️ Limpando dados antigos...');
+  console.log('🗑️ Limpando dados antigos do IVCF-20...');
 
-  await prisma.answer.deleteMany({});
-  await prisma.questionnaireResponse.deleteMany({});
-  await prisma.questionOption.deleteMany({});
-  await prisma.question.deleteMany({});
-  await prisma.questionSubGroup.deleteMany({});
-  await prisma.questionGroup.deleteMany({});
-  await prisma.questionnaire.deleteMany({});
+  const existingIvcf = await prisma.questionnaire.findUnique({
+    where: { slug: 'ivcf-20' },
+    select: { id: true },
+  });
 
-  await prisma.sensorData.deleteMany({});
-  await prisma.evaluation.deleteMany({});
-  await prisma.evaluationIndicators.deleteMany({});
-  await prisma.participant.deleteMany({});
-  await prisma.researcher.deleteMany({});
-  await prisma.healthProfessional.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.institution.deleteMany({});
-  await prisma.healthcareUnit.deleteMany({});
+  if (existingIvcf) {
+    await prisma.answer.deleteMany({
+      where: {
+        questionnaireResponse: { questionnaireId: existingIvcf.id },
+      },
+    });
+
+    await prisma.questionnaireResponse.deleteMany({
+      where: { questionnaireId: existingIvcf.id },
+    });
+
+    await prisma.questionOption.deleteMany({
+      where: {
+        question: {
+          OR: [
+            { group: { questionnaireId: existingIvcf.id } },
+            { subGroup: { group: { questionnaireId: existingIvcf.id } } },
+          ],
+        },
+      },
+    });
+
+    await prisma.question.deleteMany({
+      where: {
+        OR: [
+          { group: { questionnaireId: existingIvcf.id } },
+          { subGroup: { group: { questionnaireId: existingIvcf.id } } },
+        ],
+      },
+    });
+
+    await prisma.questionSubGroup.deleteMany({
+      where: { group: { questionnaireId: existingIvcf.id } },
+    });
+
+    await prisma.questionGroup.deleteMany({
+      where: { questionnaireId: existingIvcf.id },
+    });
+
+    await prisma.questionnaire.deleteMany({ where: { id: existingIvcf.id } });
+  }
 
   // ==================================================
   // 2. QUESTIONÁRIO IVCF-20 (Criação da Estrutura)
   // ==================================================
   console.log('📝 Criando Questionário IVCF-20 Estrutural...');
 
-  const createdIvcf = await prisma.questionnaire.create({
+  await prisma.questionnaire.create({
     data: {
       title: 'IVCF-20',
       slug: 'ivcf-20',
@@ -171,7 +202,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 },
+                      { label: 'Sim', score: 1, order: 2 },
                     ],
                   },
                 },
@@ -182,7 +213,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 },
+                      { label: 'Sim', score: 1, order: 2 },
                     ],
                   },
                 },
@@ -194,7 +225,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 4, order: 2 },
+                      { label: 'Sim', score: 2, order: 2 },
                     ],
                   },
                 },
@@ -215,7 +246,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 },
+                      { label: 'Sim', score: 2, order: 2 },
                     ],
                   },
                 },
@@ -283,8 +314,23 @@ async function main() {
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
                         create: [
-                          { label: 'Não', score: 0, order: 1 },
-                          { label: 'Sim', score: 2, order: 2 },
+                          {
+                            label: 'Perda de peso maior que 4,5 kg no último ano',
+                            score: 2,
+                            order: 1,
+                          },
+                          { label: 'IMC menor que 22 kg/m²', score: 2, order: 2 },
+                          {
+                            label: 'Circunferência da panturrilha menor que 31 cm',
+                            score: 2,
+                            order: 3,
+                          },
+                          {
+                            label: 'Tempo de marcha (4 m) maior que 5 segundos',
+                            score: 2,
+                            order: 4,
+                          },
+                          { label: 'Nenhuma das condições', score: 0, order: 5 },
                         ],
                       },
                     },
@@ -354,7 +400,7 @@ async function main() {
                   questions: {
                     create: {
                       statement:
-                        'Você tem problemas de visão capazes de impedir a realização de alguma atividade do cotidiano?',
+                        'Você tem problemas de visão capazes de impedir a realização de alguma atividade do cotidiano? É permitido o uso de óculos ou lentes de contato.',
                       order: 18,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -372,7 +418,7 @@ async function main() {
                   questions: {
                     create: {
                       statement:
-                        'Você tem problemas de audição capazes de impedir a realização de alguma atividade do cotidiano?',
+                        'Você tem problemas de audição capazes de impedir a realização de alguma atividade do cotidiano? É permitido o uso de aparelhos de audição.',
                       order: 19,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -399,8 +445,22 @@ async function main() {
                 type: QuestionType.MULTIPLE_CHOICE,
                 options: {
                   create: [
-                    { label: 'Não', score: 0, order: 1 },
-                    { label: 'Sim', score: 4, order: 2 },
+                    {
+                      label: 'Cinco ou mais doenças crônicas (polipatologia)',
+                      score: 4,
+                      order: 1,
+                    },
+                    {
+                      label: 'Uso de cinco ou mais medicamentos (polifarmácia)',
+                      score: 4,
+                      order: 2,
+                    },
+                    {
+                      label: 'Internação hospitalar nos últimos 6 meses',
+                      score: 4,
+                      order: 3,
+                    },
+                    { label: 'Nenhuma das condições', score: 0, order: 4 },
                   ],
                 },
               },
@@ -411,320 +471,7 @@ async function main() {
     },
   });
 
-  // =========================================================================
-  // 2.1 RECUPERAR A ESTRUTURA PARA USAR NO LOOP (FLATTENING QUESTIONS)
-  // =========================================================================
-  // Precisamos buscar de volta para ter os IDs gerados das Questions e Options
-  const ivcfFull = await prisma.questionnaire.findUnique({
-    where: { id: createdIvcf.id },
-    include: {
-      groups: {
-        include: {
-          questions: { include: { options: true } },
-          subGroups: {
-            include: {
-              questions: { include: { options: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Cria uma lista plana de todas as questões para facilitar a iteração na hora de responder
-  const flatQuestions: any[] = [];
-  if (ivcfFull?.groups) {
-    ivcfFull.groups.forEach((group) => {
-      // Questões diretas do grupo
-      if (group.questions) {
-        flatQuestions.push(...group.questions);
-      }
-      // Questões dentro de subgrupos
-      if (group.subGroups) {
-        group.subGroups.forEach((sub) => {
-          if (sub.questions) {
-            flatQuestions.push(...sub.questions);
-          }
-        });
-      }
-    });
-  }
-
-  // ==================================================
-  // 3. SENHA PADRÃO E USUÁRIOS FIXOS
-  // ==================================================
-  const passwordHash = await hashPassword('senha123');
-
-  console.log('👑 Criando Usuários Fixos...');
-
-  // 3.1 ADMIN
-  await prisma.user.create({
-    data: {
-      cpf: '00000000000',
-      fullName: 'Admin do Sistema',
-      fullName_normalized: 'admin do sistema',
-      gender: Gender.OTHER,
-      password: passwordHash,
-      role: SystemRole.MANAGER,
-    },
-  });
-
-  // 3.2 MÉDICO FIXO
-  const fixedDoctor = await prisma.user.create({
-    data: {
-      cpf: '11111111111',
-      fullName: 'Dra. Ana Fixa',
-      fullName_normalized: 'dra. ana fixa',
-      gender: Gender.FEMALE,
-      password: passwordHash,
-      role: SystemRole.HEALTH_PROFESSIONAL,
-      healthProfessional: {
-        create: {
-          email: 'ana.fixa@teste.com',
-          speciality: 'Geriatria',
-          speciality_normalized: 'geriatria',
-        },
-      },
-    },
-    include: { healthProfessional: true },
-  });
-
-  const healthProsIds: string[] = [];
-  if (fixedDoctor.healthProfessional) {
-    healthProsIds.push(fixedDoctor.healthProfessional.id);
-  }
-
-  // ==================================================
-  // 4. ESTRUTURA (INSTITUIÇÃO E UNIDADES)
-  // ==================================================
-  console.log('🏥 Criando Estrutura...');
-
-  await prisma.institution.create({
-    data: {
-      title: 'UFPR',
-      title_normalized: normalizeString('UFPR') || 'ufpr',
-    },
-  });
-
-  const units = await Promise.all([
-    prisma.healthcareUnit.create({
-      data: {
-        name: 'UBS Centro',
-        name_normalized: normalizeString('UBS Centro') || 'ubs centro',
-        zipCode: '80000000',
-        street: 'Rua XV',
-        number: '10',
-        city: 'Curitiba',
-        state: 'PR',
-        neighborhood: 'Centro',
-      },
-    }),
-    prisma.healthcareUnit.create({
-      data: {
-        name: 'Hospital de Clínicas',
-        name_normalized:
-          normalizeString('Hospital de Clínicas') || 'hospital de clinicas',
-        zipCode: '80060000',
-        street: 'General Carneiro',
-        number: '181',
-        city: 'Curitiba',
-        state: 'PR',
-        neighborhood: 'Alto da Glória',
-      },
-    }),
-  ]);
-
-  // ==================================================
-  // 5. PROFISSIONAIS ALEATÓRIOS
-  // ==================================================
-  console.log('👨‍⚕️ Criando Profissionais Aleatórios...');
-  for (let i = 0; i < 5; i++) {
-    const name = faker.person.fullName();
-    const hpUser = await prisma.user.create({
-      data: {
-        cpf: faker.string.numeric(11),
-        fullName: name,
-        fullName_normalized: normalizeString(name) || name.toLowerCase(),
-        gender: i % 2 === 0 ? Gender.MALE : Gender.FEMALE,
-        password: passwordHash,
-        role: SystemRole.HEALTH_PROFESSIONAL,
-        healthProfessional: {
-          create: {
-            email: faker.internet.email(),
-            speciality: 'Fisioterapia',
-            speciality_normalized: 'fisioterapia',
-          },
-        },
-      },
-      include: { healthProfessional: true },
-    });
-
-    if (hpUser.healthProfessional) {
-      healthProsIds.push(hpUser.healthProfessional.id);
-    }
-  }
-
-  // ==================================================
-  // 6. PACIENTES E DADOS CLÍNICOS (Questionários e Sensores)
-  // ==================================================
-  console.log('👴 Criando 20 Pacientes com Avaliações e Questionários...');
-
-  for (let i = 0; i < 20; i++) {
-    const sex = i % 2 === 0 ? 'male' : 'female';
-    const name = faker.person.fullName({ sex });
-
-    // Cria o paciente
-    const participantUser = await prisma.user.create({
-      data: {
-        cpf: faker.string.numeric(11),
-        fullName: name,
-        fullName_normalized: normalizeString(name) || name.toLowerCase(),
-        gender: sex === 'male' ? Gender.MALE : Gender.FEMALE,
-        password: passwordHash,
-        role: SystemRole.PARTICIPANT,
-        participant: {
-          create: {
-            birthday: faker.date.birthdate({ min: 60, max: 90, mode: 'age' }),
-            weight: faker.number.int({ min: 50, max: 100 }),
-            height: faker.number.int({ min: 150, max: 190 }),
-            zipCode: '80000000',
-            street: faker.location.street(),
-            number: String(faker.number.int({ min: 1, max: 1000 })),
-            city: 'Curitiba',
-            state: 'PR',
-            neighborhood: 'Batel',
-            socio_economic_level: SocialEconomicLevel.C,
-            scholarship: Scholarship.HIGH_SCHOOL_COMPLETE,
-          },
-        },
-      },
-      include: { participant: true },
-    });
-
-    if (!participantUser.participant) continue;
-    const participantId = participantUser.participant.id;
-    const randomHPId =
-      healthProsIds[Math.floor(Math.random() * healthProsIds.length)];
-
-    // ------------------------------------------------------------------
-    // 6.1 RESPONDER QUESTIONÁRIO (Simulação)
-    // ------------------------------------------------------------------
-    // Vamos simular que 80% dos pacientes responderam ao IVCF-20
-    if (Math.random() > 0.2 && ivcfFull) {
-      const responseDate = faker.date.recent({ days: 90 });
-      let totalScore = 0;
-
-      // Prepara os dados das respostas (Answers)
-      const answersData = flatQuestions
-        .map((question) => {
-          // Seleciona uma opção aleatória (simulando resposta do paciente)
-          if (!question.options || question.options.length === 0) return null;
-
-          // Ponderação simples: dar preferência para pontuação 0 (saudável) na maioria das vezes para não gerar só idosos frágeis
-          const isHealthy = Math.random() > 0.4;
-          const selectedOption = isHealthy
-            ? question.options.find((o: any) => o.score === 0) ||
-              question.options[0]
-            : question.options[
-                Math.floor(Math.random() * question.options.length)
-              ];
-
-          // Acumula o score
-          totalScore += selectedOption.score;
-
-          return {
-            questionId: question.id,
-            selectedOptionId: selectedOption.id,
-          };
-        })
-        .filter((a) => a !== null); // Remove nulos caso alguma questao nao tenha opcao
-
-      // Define classificação baseada na soma (Lógica aproximada do IVCF-20)
-      // 0-6: Robusto | 7-14: Em Risco de Fragilização | >=15: Frágil
-      let classification = 'Robusto';
-      if (totalScore >= 7 && totalScore <= 14) {
-        classification = 'Potencialmente Frágil';
-      } else if (totalScore >= 15) {
-        classification = 'Frágil';
-      }
-
-      // Cria a Response com as Answers aninhadas
-      await prisma.questionnaireResponse.create({
-        data: {
-          participantId: participantId,
-          healthProfessionalId: randomHPId,
-          questionnaireId: ivcfFull.id,
-          date: responseDate,
-          totalScore: totalScore,
-          classification: classification,
-          answers: {
-            create: answersData as any, // "as any" apenas para simplificar tipagem complexa no seed
-          },
-        },
-      });
-    }
-
-    // ------------------------------------------------------------------
-    // 6.2 AVALIAÇÃO FÍSICA (Sensor)
-    // ------------------------------------------------------------------
-    const numEvals = faker.number.int({ min: 1, max: 3 });
-
-    for (let j = 0; j < numEvals; j++) {
-      const randomUnit = units[Math.floor(Math.random() * units.length)];
-      const date = faker.date.recent({ days: 60 });
-      const timeInit = new Date(date);
-      const timeEnd = new Date(date.getTime() + 30000); // 30 segundos depois
-
-      // Gera dados fake de acelerômetro
-      const sensorDataMock = Array.from({ length: 50 }).map((_, idx) => {
-        const wave = Math.sin(idx * 0.2);
-        return {
-          timestamp: new Date(timeInit.getTime() + idx * 100), // 10Hz aprox
-          accel_x: wave * 0.5,
-          accel_y: faker.number.float({ min: -0.1, max: 0.1 }),
-          accel_z: 1.0 + wave * 0.5,
-          gyro_x: faker.number.float({ min: -0.1, max: 0.1 }),
-          gyro_y: wave * 2.0,
-          gyro_z: faker.number.float({ min: -0.1, max: 0.1 }),
-          filtered: false,
-        };
-      });
-
-      // Cria a avaliação com os dados do sensor
-      await prisma.evaluation.create({
-        data: {
-          type: TypeEvaluation.FTSTS,
-          date: date,
-          time_init: timeInit,
-          time_end: timeEnd,
-          participantId: participantId,
-          healthProfessionalId: randomHPId,
-          healthcareUnitId: randomUnit.id,
-          sensorData: {
-            createMany: {
-              data: sensorDataMock,
-            },
-          },
-          // Opcional: Criar indicadores calculados
-          indicators: {
-            create: {
-              repetitionCount: faker.number.int({ min: 3, max: 10 }),
-              meanPower: faker.number.float({ min: 100, max: 300 }),
-              totalEnergy: faker.number.float({ min: 500, max: 2000 }),
-              classification: 'Normal',
-            },
-          },
-        },
-      });
-    }
-  }
-
   console.log('✅ Seed concluído com sucesso!');
-  console.log('------------------------------------------------');
-  console.log('🔑 CREDENCIAIS:');
-  console.log('   ADMIN:   CPF 00000000000 / senha123');
-  console.log('   MÉDICO:  CPF 11111111111 / senha123');
-  console.log('------------------------------------------------');
 }
 
 main()
