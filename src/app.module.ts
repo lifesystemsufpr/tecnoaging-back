@@ -16,6 +16,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
 import { ParticipantModule } from './modules/participant/participant.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
+import { QuestionnairesModule } from './modules/questionnaire/questionnaire.module';
 import { APP_FILTER } from '@nestjs/core';
 import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
 
@@ -40,6 +41,7 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     HealthUnitModule,
     InstitutionModule,
     DashboardModule,
+    QuestionnairesModule,
   ],
   providers: [
     ...provideGlobalAppGuards(),
