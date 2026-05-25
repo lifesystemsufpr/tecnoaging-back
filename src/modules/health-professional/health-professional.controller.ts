@@ -14,7 +14,7 @@ import { UpdateHealthProfessionalDto } from './dto/update-health-professional.dt
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { FindHealthProfessionalsQueryDto } from './dto/find-health-professionals-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('health-professional')
@@ -33,7 +33,7 @@ export class HealthProfessionalController {
 
   @Get()
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
-  findAll(@Query() queryDto: QueryDto) {
+  findAll(@Query() queryDto: FindHealthProfessionalsQueryDto) {
     return this.healthProfessionalService.findAll(queryDto);
   }
 
