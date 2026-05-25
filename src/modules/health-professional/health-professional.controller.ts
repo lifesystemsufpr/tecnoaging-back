@@ -13,6 +13,7 @@ import { CreateHealthProfessionalDto } from './dto/create-health-professional.dt
 import { UpdateHealthProfessionalDto } from './dto/update-health-professional.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { SystemRole } from '@prisma/client';
 import { FindHealthProfessionalsQueryDto } from './dto/find-health-professionals-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
@@ -25,8 +26,8 @@ export class HealthProfessionalController {
     private readonly healthProfessionalService: HealthProfessionalService,
   ) {}
 
+  @Public()
   @Post()
-  @Roles([SystemRole.MANAGER])
   create(@Body() createHealthProfessionalDto: CreateHealthProfessionalDto) {
     return this.healthProfessionalService.create(createHealthProfessionalDto);
   }
