@@ -7,27 +7,28 @@ import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { Payload } from '../auth/interfaces/auth.interface';
 import { DashboardAdvancedService } from './dashboard-advanced.service';
 import {
-  AverageTestByAgeGroupDto,
-  MonthlyHistoryDto,
-  DashboardSummaryDto,
   CurrentMonthEvaluationsDto,
+  DashboardSummaryDto,
   EvaluationsByTestAndGenderDto,
   Gender,
+  MonthlyHistoryDto,
+  PercentileEntryDto,
   TestType,
 } from './dto/dashboard-advanced.dto';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('dashboard/advanced')
 @UseGuards(JwtAuthGuard, RoleGuard)
+@ApiStandardErrors()
 export class DashboardAdvancedController {
   constructor(private service: DashboardAdvancedService) {}
 
   @Get('average-test-by-age-group')
   @Roles([SystemRole.RESEARCHER, SystemRole.MANAGER])
   async getAverageTestByAgeGroup(
-    @RequestUser() user: Payload,
     @Query('gender') gender?: Gender,
-  ): Promise<AverageTestByAgeGroupDto[]> {
-    return this.service.getAverageTestByAgeGroup(user.id, gender);
+  ): Promise<PercentileEntryDto[]> {
+    return this.service.getAverageTestByAgeGroup(gender);
   }
 
   @Get('monthly-history')

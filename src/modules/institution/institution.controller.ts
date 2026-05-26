@@ -15,9 +15,11 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FindInstitutionsQueryDto } from './dto/find-institution-query.dto';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('institution')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class InstitutionController {
   constructor(private readonly institutionService: InstitutionService) {}
 

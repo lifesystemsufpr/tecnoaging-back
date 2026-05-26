@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import appConfig from './shared/config/app.config';
 import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -16,7 +17,7 @@ import provideGlobalAppGuards from './modules/auth/providers/global-guards.provi
 import { ParticipantModule } from './modules/participant/participant.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { APP_FILTER } from '@nestjs/core';
-import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-client-exception.filter';
+import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
       envFilePath: ['.env.local', '.env'],
       load: [appConfig],
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     SharedModule,
     AuthModule,
@@ -44,7 +46,7 @@ import { PrismaClientExceptionFilter } from './shared/prisma/filters/prisma-clie
     UserService,
     {
       provide: APP_FILTER,
-      useClass: PrismaClientExceptionFilter,
+      useClass: AllExceptionsFilter,
     },
   ],
 })

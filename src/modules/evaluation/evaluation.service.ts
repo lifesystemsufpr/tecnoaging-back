@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   Evaluation,
@@ -24,16 +30,20 @@ import {
   CurrentMonthByGenderResponseDto,
   DashboardSummaryResponseDto,
   MonthlyHistoryResponseDto,
+  ProfessionalMobileSummaryResponseDto,
   TeamPerformanceResponseDto,
 } from './dto/dashboard/dashboard-response.dto';
 import { DASHBOARD_TIMEZONE, MONTH_LABELS_PT_BR } from './constants';
 import {
   buildMonthKey,
   calculateAverageCount,
+  computePercentageChange,
+  computeTrend,
   getCurrentMonthAndYear,
   getCurrentMonthRangeUtc,
   getLastTwelveMonths,
   getMonthStartUtc,
+  getPreviousMonthRangeUtc,
 } from './utils/dashboard.utils';
 
 // --- TIPAGENS AUXILIARES ---
@@ -166,6 +176,7 @@ export class EvaluationService extends BaseService<
   EvaluationResponse
 > {
   private readonly logger = new Logger(EvaluationService.name);
+  private readonly processingIds = new Set<string>();
 
   constructor(
     protected readonly prisma: PrismaService,
@@ -301,7 +312,114 @@ export class EvaluationService extends BaseService<
       if (isAxiosError(error) && error.response) {
         this.logger.error(JSON.stringify(error.response.data));
       }
-      throw new Error('Failed to process biomechanical data.');
+      throw new ServiceUnavailableException(
+        'Failed to process biomechanical data.',
+      );
+    }
+  }
+
+  async processPendingEvaluations(): Promise<{
+    processed: number;
+    failed: number;
+    skipped: number;
+  }> {
+    const pending = await this.prisma.evaluation.findMany({
+      where: {
+        indicators: { is: null },
+        sensorData: { some: { filtered: false } },
+      },
+      include: {
+        participant: { include: { user: true } },
+      },
+    });
+
+    let processed = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const evaluation of pending) {
+      const age = this.calculateAge(
+        evaluation.participant.birthday,
+        new Date(),
+      );
+
+      const userProfile = {
+        weight: evaluation.participant.weight,
+        height: evaluation.participant.height,
+        sex: evaluation.participant.user.gender,
+        age,
+      };
+
+      try {
+        await this.processEvaluationData(evaluation.id, userProfile);
+        processed++;
+      } catch (err) {
+        if (err instanceof NotFoundException) {
+          skipped++;
+          continue;
+        }
+        failed++;
+        this.logger.error(
+          `Failed to reprocess pending evaluation ${evaluation.id}`,
+          err,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Pending evaluations batch finished — processed=${processed} failed=${failed} skipped=${skipped} total=${pending.length}`,
+    );
+
+    return { processed, failed, skipped };
+  }
+
+  async processPendingEvaluationById(id: string): Promise<{
+    status: 'PROCESSED';
+    evaluationId: string;
+  }> {
+    if (this.processingIds.has(id)) {
+      throw new ConflictException('Evaluation is already being processed.');
+    }
+
+    this.processingIds.add(id);
+    this.logger.log(`Manual processing requested for evaluation ${id}.`);
+
+    try {
+      const evaluation = await this.prisma.evaluation.findFirst({
+        where: {
+          id,
+          sensorData: { some: { filtered: false } },
+        },
+        include: {
+          participant: { include: { user: true } },
+        },
+      });
+
+      if (!evaluation) {
+        throw new NotFoundException(
+          'Evaluation not found or has no pending sensor data to process.',
+        );
+      }
+
+      const age = this.calculateAge(
+        evaluation.participant.birthday,
+        new Date(),
+      );
+
+      const userProfile = {
+        weight: evaluation.participant.weight,
+        height: evaluation.participant.height,
+        sex: evaluation.participant.user.gender,
+        age,
+      };
+
+      await this.processEvaluationData(evaluation.id, userProfile);
+
+      this.logger.log(`Manual processing finished for evaluation ${id}.`);
+
+      return { status: 'PROCESSED', evaluationId: id };
+    } finally {
+      this.processingIds.delete(id);
     }
   }
 
@@ -332,7 +450,10 @@ export class EvaluationService extends BaseService<
     };
 
     const { data: result } = await lastValueFrom(
-      this.httpService.post<PythonResponse>(`${pythonUrl}/processar`, pythonPayload),
+      this.httpService.post<PythonResponse>(
+        `${pythonUrl}/processar`,
+        pythonPayload,
+      ),
     );
 
     await this.prisma.$transaction(async (txArgument) => {
@@ -379,6 +500,11 @@ export class EvaluationService extends BaseService<
           })),
         });
       }
+
+      await tx.sensorData.updateMany({
+        where: { evaluationId, filtered: false },
+        data: { filtered: true },
+      });
     });
 
     return result.metricas_globais;
@@ -453,6 +579,11 @@ export class EvaluationService extends BaseService<
           })),
         });
       }
+
+      await tx.sensorData.updateMany({
+        where: { evaluationId, filtered: false },
+        data: { filtered: true },
+      });
     });
 
     return g;
@@ -475,7 +606,6 @@ export class EvaluationService extends BaseService<
       where: { id },
       include: {
         sensorData: {
-          where: { filtered: false },
           orderBy: { timestamp: 'asc' },
         },
         indicators: true,
@@ -1025,6 +1155,149 @@ export class EvaluationService extends BaseService<
       currentMonthByGender,
       teamPerformance,
       monthlyHistory,
+    };
+  }
+
+  async getProfessionalMobileSummary(
+    healthProfessionalId: string,
+  ): Promise<ProfessionalMobileSummaryResponseDto> {
+    await this.ensureHealthProfessionalExists(healthProfessionalId);
+
+    const { startUtc: curStart, endUtc: curEnd } =
+      getCurrentMonthRangeUtc(DASHBOARD_TIMEZONE);
+    const { startUtc: prevStart, endUtc: prevEnd } =
+      getPreviousMonthRangeUtc(DASHBOARD_TIMEZONE);
+    const { month, year } = getCurrentMonthAndYear(DASHBOARD_TIMEZONE);
+
+    const [
+      monthlyHistory,
+      currentCount,
+      previousCount,
+      allEvaluations,
+      unitRows,
+    ] = await Promise.all([
+      this.getMonthlyHistory(healthProfessionalId),
+      this.prisma.evaluation.count({
+        where: {
+          healthProfessionalId,
+          date: { gte: curStart, lt: curEnd },
+        },
+      }),
+      this.prisma.evaluation.count({
+        where: {
+          healthProfessionalId,
+          date: { gte: prevStart, lt: prevEnd },
+        },
+      }),
+      this.prisma.evaluation.findMany({
+        where: { healthProfessionalId },
+        select: {
+          participant: {
+            select: { user: { select: { gender: true } } },
+          },
+        },
+      }),
+      this.prisma.evaluation.findMany({
+        where: { healthProfessionalId },
+        select: { healthcareUnitId: true },
+        distinct: ['healthcareUnitId'],
+      }),
+    ]);
+
+    const unitIds = unitRows.map((r) => r.healthcareUnitId);
+
+    const [curTeamGroups, prevTeamGroups] = await Promise.all([
+      unitIds.length
+        ? this.prisma.evaluation.groupBy({
+            by: ['healthProfessionalId'],
+            where: {
+              healthcareUnitId: { in: unitIds },
+              date: { gte: curStart, lt: curEnd },
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve<{ _count: { _all: number } }[]>([]),
+      unitIds.length
+        ? this.prisma.evaluation.groupBy({
+            by: ['healthProfessionalId'],
+            where: {
+              healthcareUnitId: { in: unitIds },
+              date: { gte: prevStart, lt: prevEnd },
+            },
+            _count: { _all: true },
+          })
+        : Promise.resolve<{ _count: { _all: number } }[]>([]),
+    ]);
+
+    // averages.global
+    const globalCurrent = calculateAverageCount(
+      curTeamGroups.map((g) => g._count._all),
+    );
+    const globalPrevious = calculateAverageCount(
+      prevTeamGroups.map((g) => g._count._all),
+    );
+    const globalPctChange = computePercentageChange(
+      globalCurrent,
+      globalPrevious,
+    );
+
+    // averages.individual — média dos últimos 12 meses usando monthlyHistory
+    const individualMonthlyAvg = calculateAverageCount(
+      monthlyHistory.data.map((d) => d.total),
+    );
+    const individualPctChange = computePercentageChange(
+      currentCount,
+      individualMonthlyAvg,
+    );
+
+    // gender distribution — período inteiro
+    let male = 0;
+    let female = 0;
+    for (const ev of allEvaluations) {
+      const gender = ev.participant.user.gender;
+      if (gender === 'MALE') male++;
+      else if (gender === 'FEMALE') female++;
+    }
+    const total = allEvaluations.length;
+    const malePercentage =
+      total > 0 ? Number(((male / total) * 100).toFixed(1)) : 0;
+    const femalePercentage =
+      total > 0 ? Number(((female / total) * 100).toFixed(1)) : 0;
+
+    const evaluationsPctChange = computePercentageChange(
+      currentCount,
+      previousCount,
+    );
+
+    return {
+      evaluations: {
+        currentMonth: currentCount,
+        previousMonth: previousCount,
+        percentageChange: evaluationsPctChange,
+        month,
+        year,
+        timezone: DASHBOARD_TIMEZONE,
+      },
+      averages: {
+        global: {
+          value: globalCurrent,
+          percentageChange: globalPctChange,
+          trend: computeTrend(globalPctChange),
+        },
+        individual: {
+          value: individualMonthlyAvg,
+          percentageChange: individualPctChange,
+          trend: computeTrend(individualPctChange),
+        },
+      },
+      monthlyHistory,
+      genderDistribution: {
+        total,
+        male,
+        malePercentage,
+        female,
+        femalePercentage,
+      },
     };
   }
 

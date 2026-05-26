@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   UnauthorizedException,
   BadRequestException,
@@ -8,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AccessToken, JwtPayload, Payload } from './interfaces/auth.interface';
-import { User } from '@prisma/client';
+import { SystemRole, User } from '@prisma/client';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import {
   comparePassword,
@@ -37,9 +38,9 @@ export class AuthService {
     cpf: string,
     password: string,
   ): Promise<Partial<User> | null> {
-    try {
-      const dbUrl = process.env.DATABASE_URL || 'NÃO DEFINIDA';
+    const isProd = process.env.NODE_ENV === 'production';
 
+    try {
       const user = await this.prisma.user.findFirst({
         where: { cpf },
         select: {
@@ -53,30 +54,53 @@ export class AuthService {
       });
 
       if (!user) {
-        throw new UnauthorizedException({
-          debug_error: 'USUÁRIO_NAO_ENCONTRADO',
-          message: `O CPF ${cpf} não retornou nenhum registro.`,
-          server_env: process.env.NODE_ENV,
-          db_check: dbUrl.split('@')[1] || 'Url mal formatada ou local',
-        });
+        throw new UnauthorizedException(
+          this.authError(
+            'USUÁRIO_NAO_ENCONTRADO',
+            'Credenciais inválidas',
+            isProd
+              ? undefined
+              : {
+                  cpf,
+                  server_env: process.env.NODE_ENV,
+                  db_check:
+                    (process.env.DATABASE_URL || '').split('@')[1] ||
+                    'Url mal formatada ou local',
+                },
+          ),
+        );
       }
 
       if (user.active === false) {
-        throw new ForbiddenException({
-          debug_error: 'USUARIO_INATIVO',
-          message: 'Conta desativada',
-        });
+        throw new ForbiddenException(
+          this.authError('USUARIO_INATIVO', 'Conta desativada'),
+        );
+      }
+
+      if (user.role === SystemRole.PARTICIPANT) {
+        throw new ForbiddenException(
+          this.authError(
+            'PARTICIPANT_LOGIN_BLOCKED',
+            'Participantes não possuem acesso ao sistema.',
+          ),
+        );
       }
 
       const isPasswordValid = await comparePassword(password, user.password);
 
       if (!isPasswordValid) {
-        throw new UnauthorizedException({
-          debug_error: 'SENHA_INCORRETA',
-          message: 'O hash não bateu.',
-          stored_hash_prefix: user.password.substring(0, 10),
-          received_password_len: password.length,
-        });
+        throw new UnauthorizedException(
+          this.authError(
+            'SENHA_INCORRETA',
+            'Credenciais inválidas',
+            isProd
+              ? undefined
+              : {
+                  stored_hash_prefix: user.password.substring(0, 10),
+                  received_password_len: password.length,
+                },
+          ),
+        );
       }
 
       const { password: _, ...result } = user;
@@ -89,12 +113,23 @@ export class AuthService {
         throw error;
       }
 
-      throw new UnauthorizedException({
-        debug_error: 'ERRO_TECNICO_UNCAUGHT',
-        details: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : null,
-      });
+      this.logger.error('Unexpected error during credential validation', error);
+      throw new InternalServerErrorException(
+        'Erro interno ao validar credenciais.',
+      );
     }
+  }
+
+  private authError(
+    code: string,
+    message: string,
+    debugExtras?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      debug_error: code,
+      message,
+      ...(debugExtras ?? {}),
+    };
   }
 
   async signIn(

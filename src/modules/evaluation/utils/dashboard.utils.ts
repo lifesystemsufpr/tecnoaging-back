@@ -50,7 +50,7 @@ export function getLastTwelveMonths(timezone: string): YearMonth[] {
     getCurrentMonthAndYear(timezone);
   const result: YearMonth[] = [];
 
-  for (let offset = 11; offset >= 0; offset--) {
+  for (let offset = 12; offset >= 0; offset--) {
     const monthIndex = currentMonth - offset;
     const date = new Date(Date.UTC(currentYear, monthIndex - 1, 1));
     result.push({
@@ -71,4 +71,28 @@ export function calculateAverageCount(values: number[]): number {
 
   const total = values.reduce((sum, value) => sum + value, 0);
   return Number((total / values.length).toFixed(2));
+}
+
+export function getPreviousMonthRangeUtc(timezone: string) {
+  const { month, year } = getCurrentMonthAndYear(timezone);
+  return {
+    startUtc: getMonthStartUtc(year, month - 1, timezone),
+    endUtc: getMonthStartUtc(year, month, timezone),
+  };
+}
+
+export function computePercentageChange(
+  current: number,
+  previous: number,
+): number | null {
+  if (previous === 0) return null;
+  return Number((((current - previous) / previous) * 100).toFixed(2));
+}
+
+export function computeTrend(
+  percentageChange: number | null,
+): 'up' | 'down' | 'stable' {
+  if (percentageChange === null || Math.abs(percentageChange) < 5)
+    return 'stable';
+  return percentageChange >= 5 ? 'up' : 'down';
 }

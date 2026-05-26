@@ -197,10 +197,10 @@ class MarchaProcessor:
         # Convert timestamp to seconds float
         if "ts" not in df.columns:
             raise ValueError("Timestamp column not found in input data.")
-        if df["ts"].dtype == object:
+        if df["ts"].dtype == object or pd.api.types.is_string_dtype(df["ts"]):
             try:
-                df["ts"] = pd.to_datetime(df["ts"])
-                df["ts"] = (df["ts"] - df["ts"].iloc[0]).dt.total_seconds()
+                parsed = pd.to_datetime(df["ts"], utc=True)
+                df["ts"] = (parsed - parsed.iloc[0]).dt.total_seconds()
             except Exception:
                 df["ts"] = np.arange(len(df)) / self.FS
 
@@ -258,7 +258,13 @@ class MarchaProcessor:
             det_sig, self.FS, self.PEAK_MODE, self.PEAK_HEIGHT, self.PEAK_PROM, self.MIN_DIST_S
         )
         if idx_full.size == 0:
-            raise ValueError("No peaks detected in the signal.")
+            raise ValueError(
+                f"No peaks detected in the signal. "
+                f"Signal max={float(det_sig.max()):.1f} deg/s, "
+                f"threshold={self.PEAK_HEIGHT} deg/s, "
+                f"duration={float(t_rel[-1]):.1f}s, "
+                f"n_samples={len(det_sig)}"
+            )
 
         first_peak = int(idx_full[0])
         pre_win = int(round(2.0 * self.FS))

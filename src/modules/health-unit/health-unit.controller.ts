@@ -15,9 +15,11 @@ import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FindHealthcareUnitsQueryDto } from './dto/find-health-unit-query.dto';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('health-unit')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class HealthUnitController {
   constructor(private readonly healthUnitService: HealthUnitService) {}
 

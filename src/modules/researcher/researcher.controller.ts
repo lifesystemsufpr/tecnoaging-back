@@ -15,9 +15,11 @@ import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { SystemRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { QueryDto } from 'src/shared/dto/query.dto';
+import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('researcher')
 @ApiBearerAuth()
+@ApiStandardErrors()
 export class ResearcherController {
   constructor(private readonly researcherService: ResearcherService) {}
 

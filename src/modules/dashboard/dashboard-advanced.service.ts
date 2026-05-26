@@ -1,13 +1,12 @@
 // Tipos para os retornos do repository
 type AgeGroupRow = {
-  age_group: string;
+  age_group: AgeGroup;
   count: number;
-  average: number;
-  min: number;
-  q1: number;
-  median: number;
-  q3: number;
-  max: number;
+  p5: number | null;
+  p25: number | null;
+  p50: number | null;
+  p75: number | null;
+  p95: number | null;
 };
 
 type MonthlyHistoryRow = {
@@ -40,12 +39,15 @@ type TestAndGenderRow = {
 import { Injectable } from '@nestjs/common';
 import { DashboardAdvancedRepository } from './repositories/dashboard-advanced.repository';
 import {
-  AverageTestByAgeGroupDto,
-  MonthlyHistoryDto,
-  DashboardSummaryDto,
+  AGE_GROUPS,
+  AgeGroup,
   CurrentMonthEvaluationsDto,
+  DashboardSummaryDto,
   EvaluationsByTestAndGenderDto,
   Gender,
+  MonthlyHistoryDto,
+  PERCENTILES,
+  PercentileEntryDto,
   TestType,
 } from './dto/dashboard-advanced.dto';
 
@@ -54,23 +56,41 @@ export class DashboardAdvancedService {
   constructor(private repository: DashboardAdvancedRepository) {}
 
   async getAverageTestByAgeGroup(
-    healthProfessionalId: string,
     gender?: Gender,
-  ): Promise<AverageTestByAgeGroupDto[]> {
+  ): Promise<PercentileEntryDto[]> {
     const data = (await this.repository.getAverageTestByAgeGroup(
-      healthProfessionalId,
       gender,
     )) as AgeGroupRow[];
-    return data.map((item) => ({
-      ageGroup: item.age_group,
-      count: Number(item.count),
-      average: Number(item.average),
-      min: Number(item.min),
-      q1: Number(item.q1),
-      median: Number(item.median),
-      q3: Number(item.q3),
-      max: Number(item.max),
-    }));
+
+    const byAgeGroup = new Map<AgeGroup, AgeGroupRow>();
+    for (const row of data) {
+      byAgeGroup.set(row.age_group, row);
+    }
+
+    const percentileColumns: Record<
+      (typeof PERCENTILES)[number],
+      keyof AgeGroupRow
+    > = {
+      5: 'p5',
+      25: 'p25',
+      50: 'p50',
+      75: 'p75',
+      95: 'p95',
+    };
+
+    return PERCENTILES.map((percentile) => {
+      const values = AGE_GROUPS.reduce(
+        (acc, group) => {
+          const row = byAgeGroup.get(group);
+          const raw = row ? row[percentileColumns[percentile]] : null;
+          acc[group] = raw == null ? 0 : Number(raw);
+          return acc;
+        },
+        {} as Record<AgeGroup, number>,
+      );
+
+      return { percentile, values };
+    });
   }
 
   async getMonthlyHistory(
