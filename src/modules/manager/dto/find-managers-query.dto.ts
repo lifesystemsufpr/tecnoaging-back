@@ -1,18 +1,16 @@
-import { IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { Gender } from '@prisma/client';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
 
-export enum ResearcherSortField {
+export enum ManagerSortField {
   FULL_NAME = 'fullName',
   CPF = 'cpf',
-  EMAIL = 'email',
-  FIELD_OF_STUDY = 'fieldOfStudy',
-  INSTITUTION_NAME = 'institutionName',
   CREATED_AT = 'createdAt',
 }
 
-export class FindResearchersQueryDto extends PaginationDto {
+export class FindManagersQueryDto extends PaginationDto {
   @ApiProperty({ required: false, description: 'Filtrar por CPF' })
   @IsOptional()
   @IsString()
@@ -23,29 +21,25 @@ export class FindResearchersQueryDto extends PaginationDto {
   @IsString()
   fullName?: string;
 
-  @ApiProperty({ required: false, description: 'Filtrar por e-mail' })
+  @ApiProperty({ required: false, description: 'Filtrar por telefone' })
   @IsOptional()
   @IsString()
-  email?: string;
-
-  @ApiProperty({ required: false, description: 'Filtrar por área de estudo' })
-  @IsOptional()
-  @IsString()
-  fieldOfStudy?: string;
+  phone?: string;
 
   @ApiProperty({ required: false, enum: Gender, description: 'Filtrar por gênero' })
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
 
-  @ApiProperty({ required: false, description: 'Filtrar por ID da instituição' })
+  @ApiProperty({ required: false, description: 'Filtrar por status ativo/inativo' })
   @IsOptional()
-  @IsString()
-  institutionId?: string;
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  active?: boolean;
 
   @ApiProperty({
     required: false,
-    enum: ResearcherSortField,
+    enum: ManagerSortField,
     description: 'Campo para ordenação. Valores inválidos são ignorados.',
   })
   @IsOptional()

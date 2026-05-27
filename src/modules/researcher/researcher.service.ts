@@ -88,12 +88,24 @@ export class ResearcherService extends BaseService<
   }
 
   async findAll(queryDto: FindResearchersQueryDto) {
-    const { cpf, fullName, institutionId, sortField, sortDirection = 'asc' } =
-      queryDto;
+    const {
+      cpf,
+      fullName,
+      email,
+      fieldOfStudy,
+      gender,
+      institutionId,
+      sortField,
+      sortDirection = 'asc',
+    } = queryDto;
 
     const customWhere = {
       active: true,
       ...(institutionId ? { institutionId } : {}),
+      ...(email ? { email: { contains: email, mode: 'insensitive' as const } } : {}),
+      ...(fieldOfStudy
+        ? { fieldOfStudy: { contains: fieldOfStudy, mode: 'insensitive' as const } }
+        : {}),
       user: {
         active: true,
         ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
@@ -105,6 +117,7 @@ export class ResearcherService extends BaseService<
               },
             }
           : {}),
+        ...(gender ? { gender } : {}),
       },
     };
 
@@ -249,7 +262,7 @@ export class ResearcherService extends BaseService<
 }
 
 function buildResearcherOrderBy(
-  sortField?: ResearcherSortField,
+  sortField?: string,
   direction: 'asc' | 'desc' = 'asc',
 ) {
   switch (sortField) {
@@ -257,6 +270,10 @@ function buildResearcherOrderBy(
       return { user: { fullName: direction } };
     case ResearcherSortField.CPF:
       return { user: { cpf: direction } };
+    case ResearcherSortField.EMAIL:
+      return { email: direction };
+    case ResearcherSortField.FIELD_OF_STUDY:
+      return { fieldOfStudy: direction };
     case ResearcherSortField.INSTITUTION_NAME:
       return { institution: { title: direction } };
     case ResearcherSortField.CREATED_AT:

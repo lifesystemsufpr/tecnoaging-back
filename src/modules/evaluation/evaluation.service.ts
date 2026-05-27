@@ -19,7 +19,10 @@ import {
   PrismaClient,
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
-import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
+import {
+  FilterEvaluationDto,
+  EvaluationSortField,
+} from './dto/filter-evaluation.dto';
 import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
 import { HttpService } from '@nestjs/axios';
 import { isAxiosError } from 'axios';
@@ -762,14 +765,18 @@ export class EvaluationService extends BaseService<
     const {
       page = 1,
       pageSize = 10,
-      search,
+      participantId,
       participantCpf,
       participantName,
       healthProfessionalCpf,
       healthProfessionalName,
+      healthcareUnitId,
+      healthcareUnitName,
       type,
       startDate,
       endDate,
+      sortField,
+      sortDirection = 'desc',
     } = filters;
 
     const skip = (page - 1) * pageSize;
@@ -777,26 +784,26 @@ export class EvaluationService extends BaseService<
 
     const conditions: Prisma.EvaluationWhereInput[] = [];
 
+    if (participantId) conditions.push({ participantId });
+    if (healthcareUnitId) conditions.push({ healthcareUnitId });
+    if (healthcareUnitName) {
+      conditions.push({
+        healthcareUnit: {
+          name_normalized: { contains: normalize(healthcareUnitName), mode: 'insensitive' },
+        },
+      });
+    }
+
     if (participantCpf) {
       conditions.push({
-        participant: {
-          user: {
-            cpf: {
-              contains: participantCpf,
-              mode: 'insensitive',
-            },
-          },
-        },
+        participant: { user: { cpf: { contains: participantCpf, mode: 'insensitive' } } },
       });
     }
     if (participantName) {
       conditions.push({
         participant: {
           user: {
-            fullName: {
-              contains: participantName,
-              mode: 'insensitive',
-            },
+            fullName_normalized: { contains: normalize(participantName), mode: 'insensitive' },
           },
         },
       });
@@ -805,8 +812,8 @@ export class EvaluationService extends BaseService<
       conditions.push({
         healthProfessional: {
           user: {
-            fullName: {
-              contains: healthProfessionalName,
+            fullName_normalized: {
+              contains: normalize(healthProfessionalName),
               mode: 'insensitive',
             },
           },
@@ -815,14 +822,7 @@ export class EvaluationService extends BaseService<
     }
     if (healthProfessionalCpf) {
       conditions.push({
-        healthProfessional: {
-          user: {
-            cpf: {
-              contains: healthProfessionalCpf,
-              mode: 'insensitive',
-            },
-          },
-        },
+        healthProfessional: { user: { cpf: { contains: healthProfessionalCpf, mode: 'insensitive' } } },
       });
     }
     if (type) conditions.push({ type });
@@ -837,29 +837,8 @@ export class EvaluationService extends BaseService<
       conditions.push({ date: dateFilter });
     }
 
-    if (search) {
-      const termNormalized = normalize(search);
-
-      conditions.push({
-        OR: this.searchableFields.map((field) => {
-          const parts = field.split('.');
-          const isNormalizedField = field.endsWith('_normalized');
-
-          return parts
-            .slice()
-            .reverse()
-            .reduce(
-              (obj: Record<string, any>, part: string) => ({ [part]: obj }),
-              {
-                contains: isNormalizedField ? termNormalized : search,
-                ...(isNormalizedField ? {} : { mode: 'insensitive' }),
-              },
-            ) as Prisma.EvaluationWhereInput;
-        }),
-      });
-    }
-
     const where: Prisma.EvaluationWhereInput = { AND: conditions };
+    const orderBy = buildEvaluationOrderBy(sortField, sortDirection);
 
     const selectFields = {
       id: true,
@@ -911,7 +890,7 @@ export class EvaluationService extends BaseService<
         select: selectFields,
         skip,
         take,
-        orderBy: { time_end: 'desc' },
+        orderBy,
       }),
       this.prisma.evaluation.count({ where }),
     ]);
@@ -1301,7 +1280,9 @@ export class EvaluationService extends BaseService<
     };
   }
 
-  private async ensureHealthProfessionalExists(healthProfessionalId: string) {
+  private async ensureHealthProfessionalExists(
+    healthProfessionalId: string,
+  ) {
     const healthProfessional = await this.prisma.healthProfessional.findUnique({
       where: { id: healthProfessionalId },
       select: { id: true },
@@ -1342,4 +1323,18 @@ export class EvaluationService extends BaseService<
     }));
     return { data: formattedData };
   }
+}
+
+const EVALUATION_SORTABLE_FIELDS = new Set<string>(
+  Object.values(EvaluationSortField),
+);
+
+function buildEvaluationOrderBy(
+  sortField?: string,
+  direction: 'asc' | 'desc' = 'desc',
+) {
+  if (!sortField || !EVALUATION_SORTABLE_FIELDS.has(sortField)) {
+    return { time_end: direction };
+  }
+  return { [sortField]: direction };
 }

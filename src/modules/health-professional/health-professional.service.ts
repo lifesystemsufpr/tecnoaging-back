@@ -84,11 +84,19 @@ export class HealthProfessionalService extends BaseService<
   }
 
   async findAll(queryDto: FindHealthProfessionalsQueryDto) {
-    const { cpf, fullName, speciality, sortField, sortDirection = 'asc' } =
-      queryDto;
+    const {
+      cpf,
+      fullName,
+      email,
+      speciality,
+      gender,
+      sortField,
+      sortDirection = 'asc',
+    } = queryDto;
 
     const customWhere = {
       active: true,
+      ...(email ? { email: { contains: email, mode: 'insensitive' as const } } : {}),
       ...(speciality
         ? {
             speciality_normalized: {
@@ -108,6 +116,7 @@ export class HealthProfessionalService extends BaseService<
               },
             }
           : {}),
+        ...(gender ? { gender } : {}),
       },
     };
 
@@ -260,7 +269,7 @@ export class HealthProfessionalService extends BaseService<
 }
 
 function buildHealthProfessionalOrderBy(
-  sortField?: HealthProfessionalSortField,
+  sortField?: string,
   direction: 'asc' | 'desc' = 'asc',
 ) {
   switch (sortField) {
@@ -268,6 +277,8 @@ function buildHealthProfessionalOrderBy(
       return { user: { fullName: direction } };
     case HealthProfessionalSortField.CPF:
       return { user: { cpf: direction } };
+    case HealthProfessionalSortField.EMAIL:
+      return { email: direction };
     case HealthProfessionalSortField.SPECIALITY:
       return { speciality: direction };
     case HealthProfessionalSortField.CREATED_AT:

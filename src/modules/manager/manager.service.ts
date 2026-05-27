@@ -6,7 +6,11 @@ import { UpdateManagerProfileDto } from './dto/update-manager-profile.dto';
 import { ManagerProfileDto } from './dto/manager-profile.dto';
 import { Prisma, SystemRole, User } from '@prisma/client';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { normalizeString } from 'src/shared/functions/normalize-string';
+import {
+  FindManagersQueryDto,
+  ManagerSortField,
+} from './dto/find-managers-query.dto';
 
 type ManagerResponse = Omit<User, 'password'>;
 
@@ -29,34 +33,49 @@ export class ManagerService {
     });
   }
 
-  async findAll(queryDto: QueryDto) {
-    const { search, page = 1, pageSize = 10 } = queryDto;
+  async findAll(queryDto: FindManagersQueryDto) {
+    const {
+      page = 1,
+      pageSize = 10,
+      cpf,
+      fullName,
+      phone,
+      gender,
+      active,
+      sortField,
+      sortDirection = 'asc',
+    } = queryDto;
+
     const skip = (page - 1) * pageSize;
     const take = pageSize;
 
-    const searchableFields = ['fullName', 'cpf'];
-
     const where: Prisma.UserWhereInput = {
       role: SystemRole.MANAGER,
+      ...(active !== undefined ? { active } : {}),
+      ...(gender ? { gender } : {}),
+      ...(phone ? { phone: { contains: phone, mode: 'insensitive' } } : {}),
+      AND: [
+        cpf ? { cpf: { contains: cpf, mode: 'insensitive' } } : {},
+        fullName
+          ? {
+              fullName_normalized: {
+                contains: normalizeString(fullName),
+                mode: 'insensitive',
+              },
+            }
+          : {},
+      ],
     };
 
-    if (search) {
-      where.OR = searchableFields.map((field) => ({
-        [field]: { contains: search, mode: 'insensitive' },
-      }));
-    }
+    const orderBy = buildManagerOrderBy(sortField, sortDirection);
 
     const [managers, total] = await this.prisma.$transaction([
-      this.prisma.user.findMany({
-        where,
-        skip,
-        take,
-      }),
+      this.prisma.user.findMany({ where, skip, take, orderBy }),
       this.prisma.user.count({ where }),
     ]);
 
     return {
-      data: managers.map((manager) => this.transform(manager)), // Transforma os dados para remover a senha
+      data: managers.map((manager) => this.transform(manager)),
       meta: { total, page, pageSize, lastPage: Math.ceil(total / pageSize) },
     };
   }
@@ -97,4 +116,14 @@ export class ManagerService {
     const { password: _password, ...profileData } = user;
     return profileData as ManagerProfileDto;
   }
+}
+
+const MANAGER_SORTABLE_FIELDS = new Set<string>(Object.values(ManagerSortField));
+
+function buildManagerOrderBy(
+  sortField?: string,
+  direction: 'asc' | 'desc' = 'asc',
+) {
+  if (!sortField || !MANAGER_SORTABLE_FIELDS.has(sortField)) return undefined;
+  return { [sortField]: direction };
 }
