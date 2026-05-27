@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/dev/Work/facul/ivcf/**)",
+      "Read(//home/dev/Work/facul/**)"
+    ]
+  }
+}

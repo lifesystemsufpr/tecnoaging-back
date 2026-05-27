@@ -10,7 +10,11 @@ import { UserService } from '../users/user.service';
 import { Participant, Prisma, SystemRole, User } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BaseService } from 'src/shared/services/base.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { normalizeString } from 'src/shared/functions/normalize-string';
+import {
+  FindParticipantsQueryDto,
+  ParticipantSortField,
+} from './dto/find-participants-query.dto';
 
 type ParticipantWithUser = Participant & { user: User };
 export type ParticipantResponse = Omit<ParticipantWithUser, 'user'> &
@@ -74,14 +78,32 @@ export class ParticipantService extends BaseService<
       return { ...user, ...participant };
     });
   }
-  async findAll(queryDto: QueryDto) {
+  async findAll(queryDto: FindParticipantsQueryDto) {
+    const { cpf, fullName, city, state, sortField, sortDirection = 'asc' } =
+      queryDto;
+
     const customWhere = {
       active: true,
-      user: { active: true },
+      ...(city ? { city: { contains: city, mode: 'insensitive' as const } } : {}),
+      ...(state ? { state: { contains: state, mode: 'insensitive' as const } } : {}),
+      user: {
+        active: true,
+        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(fullName
+          ? {
+              fullName_normalized: {
+                contains: normalizeString(fullName),
+                mode: 'insensitive' as const,
+              },
+            }
+          : {}),
+      },
     };
 
+    const orderBy = buildParticipantOrderBy(sortField, sortDirection);
+
     console.time('findAll-prisma-query');
-    const result = await super.findAll(queryDto, customWhere);
+    const result = await super.findAll(queryDto, customWhere, orderBy);
     console.timeEnd('findAll-prisma-query');
 
     const dataWithRelations = await Promise.all(
@@ -253,5 +275,25 @@ export class ParticipantService extends BaseService<
 
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('Participant', id);
+  }
+}
+
+function buildParticipantOrderBy(
+  sortField?: ParticipantSortField,
+  direction: 'asc' | 'desc' = 'asc',
+) {
+  switch (sortField) {
+    case ParticipantSortField.FULL_NAME:
+      return { user: { fullName: direction } };
+    case ParticipantSortField.CPF:
+      return { user: { cpf: direction } };
+    case ParticipantSortField.BIRTHDAY:
+      return { birthday: direction };
+    case ParticipantSortField.CITY:
+      return { city: direction };
+    case ParticipantSortField.CREATED_AT:
+      return { createdAt: direction };
+    default:
+      return undefined;
   }
 }

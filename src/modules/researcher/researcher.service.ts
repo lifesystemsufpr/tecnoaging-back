@@ -15,7 +15,11 @@ import {
   User,
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { normalizeString } from 'src/shared/functions/normalize-string';
+import {
+  FindResearchersQueryDto,
+  ResearcherSortField,
+} from './dto/find-researchers-query.dto';
 
 type ResearcherWithDetails = Researcher & {
   user: User;
@@ -83,15 +87,29 @@ export class ResearcherService extends BaseService<
     });
   }
 
-  async findAll(queryDto: QueryDto) {
+  async findAll(queryDto: FindResearchersQueryDto) {
+    const { cpf, fullName, institutionId, sortField, sortDirection = 'asc' } =
+      queryDto;
+
     const customWhere = {
       active: true,
+      ...(institutionId ? { institutionId } : {}),
       user: {
         active: true,
+        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(fullName
+          ? {
+              fullName_normalized: {
+                contains: normalizeString(fullName),
+                mode: 'insensitive' as const,
+              },
+            }
+          : {}),
       },
     };
 
-    const result = await super.findAll(queryDto, customWhere);
+    const orderBy = buildResearcherOrderBy(sortField, sortDirection);
+    const result = await super.findAll(queryDto, customWhere, orderBy);
 
     const itemsWithSafetyFlag = await Promise.all(
       result.data.map(async (researcher) => {
@@ -227,5 +245,23 @@ export class ResearcherService extends BaseService<
 
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('researcher', id);
+  }
+}
+
+function buildResearcherOrderBy(
+  sortField?: ResearcherSortField,
+  direction: 'asc' | 'desc' = 'asc',
+) {
+  switch (sortField) {
+    case ResearcherSortField.FULL_NAME:
+      return { user: { fullName: direction } };
+    case ResearcherSortField.CPF:
+      return { user: { cpf: direction } };
+    case ResearcherSortField.INSTITUTION_NAME:
+      return { institution: { title: direction } };
+    case ResearcherSortField.CREATED_AT:
+      return { createdAt: direction };
+    default:
+      return undefined;
   }
 }

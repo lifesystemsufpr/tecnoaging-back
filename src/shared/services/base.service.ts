@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { QueryDto } from '../dto/query.dto';
+import { PaginationDto } from '../dto/pagination.dto';
 import { normalizeString } from '../functions/normalize-string';
 
 type PrismaDelegate = {
@@ -29,8 +29,14 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
 
   protected abstract transform(entity: any): TransformedEntity;
 
-  async findAll(queryDto: QueryDto, additionalWhere: WhereInput<T> = {}) {
-    const { search, page = 1, pageSize = 10 } = queryDto;
+  async findAll(
+    queryDto: PaginationDto & { search?: string },
+    additionalWhere: WhereInput<T> = {},
+    orderBy?: any,
+  ) {
+    const { search, page = 1, pageSize = 10 } = queryDto as PaginationDto & {
+      search?: string;
+    };
 
     const skip = (page - 1) * pageSize;
     const take = pageSize;
@@ -88,6 +94,7 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
         skip,
         take,
         include: this.defaultInclude,
+        orderBy,
       }),
       this.model.count({ where }),
     ]);
