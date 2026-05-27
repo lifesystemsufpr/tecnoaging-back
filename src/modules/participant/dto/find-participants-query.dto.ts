@@ -1,5 +1,6 @@
 import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Gender, Scholarship, SocialEconomicLevel } from '@prisma/client';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
 
 export enum ParticipantSortField {
@@ -7,6 +8,9 @@ export enum ParticipantSortField {
   CPF = 'cpf',
   BIRTHDAY = 'birthday',
   CITY = 'city',
+  STATE = 'state',
+  NEIGHBORHOOD = 'neighborhood',
+  SCHOLARSHIP = 'scholarship',
   CREATED_AT = 'createdAt',
 }
 
@@ -21,6 +25,11 @@ export class FindParticipantsQueryDto extends PaginationDto {
   @IsString()
   fullName?: string;
 
+  @ApiProperty({ required: false, enum: Gender, description: 'Filtrar por gênero' })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
   @ApiProperty({ required: false, description: 'Filtrar por cidade' })
   @IsOptional()
   @IsString()
@@ -31,21 +40,41 @@ export class FindParticipantsQueryDto extends PaginationDto {
   @IsString()
   state?: string;
 
-  @ApiProperty({
-    required: false,
-    enum: ParticipantSortField,
-    description: 'Campo para ordenação',
-  })
+  @ApiProperty({ required: false, description: 'Filtrar por bairro' })
   @IsOptional()
-  @IsEnum(ParticipantSortField)
-  sortField?: ParticipantSortField;
+  @IsString()
+  neighborhood?: string;
+
+  @ApiProperty({ required: false, description: 'Filtrar por CEP' })
+  @IsOptional()
+  @IsString()
+  zipCode?: string;
+
+  @ApiProperty({ required: false, enum: Scholarship, description: 'Filtrar por escolaridade' })
+  @IsOptional()
+  @IsEnum(Scholarship)
+  scholarship?: Scholarship;
 
   @ApiProperty({
     required: false,
-    enum: ['asc', 'desc'],
-    description: 'Direção da ordenação',
+    enum: SocialEconomicLevel,
+    description: 'Filtrar por nível socioeconômico',
   })
   @IsOptional()
-  @IsEnum(['asc', 'desc'])
+  @IsEnum(SocialEconomicLevel)
+  socioEconomicLevel?: SocialEconomicLevel;
+
+  @ApiProperty({
+    required: false,
+    enum: ParticipantSortField,
+    description: 'Campo para ordenação. Valores inválidos são ignorados.',
+  })
+  @IsOptional()
+  @IsString()
+  sortField?: string;
+
+  @ApiProperty({ required: false, enum: ['asc', 'desc'], description: 'Direção da ordenação' })
+  @IsOptional()
+  @IsString()
   sortDirection?: 'asc' | 'desc' = 'asc';
 }

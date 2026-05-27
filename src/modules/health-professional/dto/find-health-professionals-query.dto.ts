@@ -1,10 +1,12 @@
 import { IsOptional, IsString, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Gender } from '@prisma/client';
 import { PaginationDto } from 'src/shared/dto/pagination.dto';
 
 export enum HealthProfessionalSortField {
   FULL_NAME = 'fullName',
   CPF = 'cpf',
+  EMAIL = 'email',
   SPECIALITY = 'speciality',
   CREATED_AT = 'createdAt',
 }
@@ -20,26 +22,32 @@ export class FindHealthProfessionalsQueryDto extends PaginationDto {
   @IsString()
   fullName?: string;
 
+  @ApiProperty({ required: false, description: 'Filtrar por e-mail' })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
   @ApiProperty({ required: false, description: 'Filtrar por especialidade' })
   @IsOptional()
   @IsString()
   speciality?: string;
 
-  @ApiProperty({
-    required: false,
-    enum: HealthProfessionalSortField,
-    description: 'Campo para ordenação',
-  })
+  @ApiProperty({ required: false, enum: Gender, description: 'Filtrar por gênero' })
   @IsOptional()
-  @IsEnum(HealthProfessionalSortField)
-  sortField?: HealthProfessionalSortField;
+  @IsEnum(Gender)
+  gender?: Gender;
 
   @ApiProperty({
     required: false,
-    enum: ['asc', 'desc'],
-    description: 'Direção da ordenação',
+    enum: HealthProfessionalSortField,
+    description: 'Campo para ordenação. Valores inválidos são ignorados.',
   })
   @IsOptional()
-  @IsEnum(['asc', 'desc'])
+  @IsString()
+  sortField?: string;
+
+  @ApiProperty({ required: false, enum: ['asc', 'desc'], description: 'Direção da ordenação' })
+  @IsOptional()
+  @IsString()
   sortDirection?: 'asc' | 'desc' = 'asc';
 }

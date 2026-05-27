@@ -79,13 +79,30 @@ export class ParticipantService extends BaseService<
     });
   }
   async findAll(queryDto: FindParticipantsQueryDto) {
-    const { cpf, fullName, city, state, sortField, sortDirection = 'asc' } =
-      queryDto;
+    const {
+      cpf,
+      fullName,
+      gender,
+      city,
+      state,
+      neighborhood,
+      zipCode,
+      scholarship,
+      socioEconomicLevel,
+      sortField,
+      sortDirection = 'asc',
+    } = queryDto;
 
     const customWhere = {
       active: true,
       ...(city ? { city: { contains: city, mode: 'insensitive' as const } } : {}),
       ...(state ? { state: { contains: state, mode: 'insensitive' as const } } : {}),
+      ...(neighborhood
+        ? { neighborhood: { contains: neighborhood, mode: 'insensitive' as const } }
+        : {}),
+      ...(zipCode ? { zipCode: { contains: zipCode, mode: 'insensitive' as const } } : {}),
+      ...(scholarship ? { scholarship } : {}),
+      ...(socioEconomicLevel ? { socio_economic_level: socioEconomicLevel } : {}),
       user: {
         active: true,
         ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
@@ -97,6 +114,7 @@ export class ParticipantService extends BaseService<
               },
             }
           : {}),
+        ...(gender ? { gender } : {}),
       },
     };
 
@@ -279,7 +297,7 @@ export class ParticipantService extends BaseService<
 }
 
 function buildParticipantOrderBy(
-  sortField?: ParticipantSortField,
+  sortField?: string,
   direction: 'asc' | 'desc' = 'asc',
 ) {
   switch (sortField) {
@@ -291,6 +309,12 @@ function buildParticipantOrderBy(
       return { birthday: direction };
     case ParticipantSortField.CITY:
       return { city: direction };
+    case ParticipantSortField.STATE:
+      return { state: direction };
+    case ParticipantSortField.NEIGHBORHOOD:
+      return { neighborhood: direction };
+    case ParticipantSortField.SCHOLARSHIP:
+      return { scholarship: direction };
     case ParticipantSortField.CREATED_AT:
       return { createdAt: direction };
     default:
