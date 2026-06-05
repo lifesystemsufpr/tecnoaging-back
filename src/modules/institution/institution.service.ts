@@ -100,13 +100,20 @@ export class InstitutionService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, performedById: string, reason?: string) {
     const relationInfo = await this.checkDeletability(id);
 
     try {
       const deactivatedInstitution = await this.prisma.institution.update({
         where: { id },
-        data: { active: false },
+        data: {
+          active: false,
+          deactivatedAt: new Date(),
+          deactivatedBy: performedById,
+          deactivationReason: reason ?? null,
+          reactivatedAt: null,
+          reactivatedBy: null,
+        },
       });
 
       return {
@@ -126,10 +133,14 @@ export class InstitutionService {
     }
   }
 
-  async reactivate(id: string) {
+  async reactivate(id: string, performedById: string) {
     return this.prisma.institution.update({
       where: { id },
-      data: { active: true },
+      data: {
+        active: true,
+        reactivatedAt: new Date(),
+        reactivatedBy: performedById,
+      },
     });
   }
 

@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -231,6 +232,21 @@ export class EvaluationService extends BaseService<
 
   async create(createEvaluationDto: CreateEvaluationDto) {
     const { sensorData, ...evaluationData } = createEvaluationDto;
+
+    const participant = await this.prisma.participant.findUnique({
+      where: { id: evaluationData.participantId },
+      select: { active: true },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participante não encontrado.');
+    }
+
+    if (!participant.active) {
+      throw new ForbiddenException(
+        'Participante inativo não pode receber novas avaliações.',
+      );
+    }
 
     const evaluation = await this.prisma.evaluation.create({
       data: {
@@ -975,6 +991,7 @@ export class EvaluationService extends BaseService<
           gte: startUtc,
           lt: endUtc,
         },
+        participant: { active: true },
       },
       select: {
         participant: {
@@ -1014,7 +1031,7 @@ export class EvaluationService extends BaseService<
     await this.ensureHealthProfessionalExists(healthProfessionalId);
 
     const unitRows = await this.prisma.evaluation.findMany({
-      where: { healthProfessionalId },
+      where: { healthProfessionalId, participant: { active: true } },
       select: { healthcareUnitId: true },
       distinct: ['healthcareUnitId'],
     });
@@ -1034,13 +1051,14 @@ export class EvaluationService extends BaseService<
         by: ['healthProfessionalId'],
         where: {
           healthcareUnitId: { in: unitIds },
+          participant: { active: true },
         },
         _count: {
           _all: true,
         },
       }),
       this.prisma.evaluation.count({
-        where: { healthProfessionalId },
+        where: { healthProfessionalId, participant: { active: true } },
       }),
     ]);
 
@@ -1086,6 +1104,7 @@ export class EvaluationService extends BaseService<
           gte: startUtc,
           lt: endUtc,
         },
+        participant: { active: true },
       },
       select: {
         date: true,
@@ -1160,16 +1179,18 @@ export class EvaluationService extends BaseService<
         where: {
           healthProfessionalId,
           date: { gte: curStart, lt: curEnd },
+          participant: { active: true },
         },
       }),
       this.prisma.evaluation.count({
         where: {
           healthProfessionalId,
           date: { gte: prevStart, lt: prevEnd },
+          participant: { active: true },
         },
       }),
       this.prisma.evaluation.findMany({
-        where: { healthProfessionalId },
+        where: { healthProfessionalId, participant: { active: true } },
         select: {
           participant: {
             select: { user: { select: { gender: true } } },
@@ -1177,7 +1198,7 @@ export class EvaluationService extends BaseService<
         },
       }),
       this.prisma.evaluation.findMany({
-        where: { healthProfessionalId },
+        where: { healthProfessionalId, participant: { active: true } },
         select: { healthcareUnitId: true },
         distinct: ['healthcareUnitId'],
       }),
@@ -1192,6 +1213,7 @@ export class EvaluationService extends BaseService<
             where: {
               healthcareUnitId: { in: unitIds },
               date: { gte: curStart, lt: curEnd },
+              participant: { active: true },
             },
             _count: { _all: true },
           })
@@ -1202,6 +1224,7 @@ export class EvaluationService extends BaseService<
             where: {
               healthcareUnitId: { in: unitIds },
               date: { gte: prevStart, lt: prevEnd },
+              participant: { active: true },
             },
             _count: { _all: true },
           })

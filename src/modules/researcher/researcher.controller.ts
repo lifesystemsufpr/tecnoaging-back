@@ -16,6 +16,9 @@ import { SystemRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { FindResearchersQueryDto } from './dto/find-researchers-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
 
 @Controller('researcher')
 @ApiBearerAuth()
@@ -54,7 +57,17 @@ export class ResearcherController {
   @Delete(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  remove(@Param('id') id: string) {
-    return this.researcherService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeactivateDto,
+    @RequestUser() user: Payload,
+  ) {
+    return this.researcherService.remove(id, user.id, dto.reason);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles([SystemRole.MANAGER])
+  reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
+    return this.researcherService.reactivate(id, user.id);
   }
 }

@@ -16,6 +16,9 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FindInstitutionsQueryDto } from './dto/find-institution-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
 
 @Controller('institution')
 @ApiBearerAuth()
@@ -50,7 +53,17 @@ export class InstitutionController {
 
   @Delete(':id')
   @Roles([SystemRole.MANAGER])
-  remove(@Param('id') id: string) {
-    return this.institutionService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeactivateDto,
+    @RequestUser() user: Payload,
+  ) {
+    return this.institutionService.remove(id, user.id, dto.reason);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles([SystemRole.MANAGER])
+  reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
+    return this.institutionService.reactivate(id, user.id);
   }
 }
