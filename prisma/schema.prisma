@@ -220,6 +220,18 @@ model EvaluationCycle {
   @@map("evaluation_cycle")
 }
 
+model PreRegistration {
+  id        String   @id @default(uuid())
+  cpf       String   @unique
+  fullName  String
+  birthday  DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("pre_registration")
+}
+
 model HealthcareUnit {
   id              String  @id @default(uuid())
   name            String
