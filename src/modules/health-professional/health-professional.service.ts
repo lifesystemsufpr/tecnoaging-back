@@ -9,8 +9,11 @@ import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { UserService } from '../users/user.service';
 import { HealthProfessional, Prisma, SystemRole, User } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
-import { QueryDto } from 'src/shared/dto/query.dto';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import {
+  FindHealthProfessionalsQueryDto,
+  HealthProfessionalSortField,
+} from './dto/find-health-professionals-query.dto';
 
 type HealthProfessionalWithUser = HealthProfessional & { user: User };
 export type HealthProfessionalResponse = Omit<
@@ -80,15 +83,45 @@ export class HealthProfessionalService extends BaseService<
     });
   }
 
-  async findAll(queryDto: QueryDto) {
+  async findAll(queryDto: FindHealthProfessionalsQueryDto) {
+    const {
+      cpf,
+      fullName,
+      email,
+      speciality,
+      gender,
+      sortField,
+      sortDirection = 'asc',
+    } = queryDto;
+
     const customWhere = {
       active: true,
+      ...(email ? { email: { contains: email, mode: 'insensitive' as const } } : {}),
+      ...(speciality
+        ? {
+            speciality_normalized: {
+              contains: normalizeString(speciality),
+              mode: 'insensitive' as const,
+            },
+          }
+        : {}),
       user: {
         active: true,
+        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(fullName
+          ? {
+              fullName_normalized: {
+                contains: normalizeString(fullName),
+                mode: 'insensitive' as const,
+              },
+            }
+          : {}),
+        ...(gender ? { gender } : {}),
       },
     };
 
-    const result = await super.findAll(queryDto, customWhere);
+    const orderBy = buildHealthProfessionalOrderBy(sortField, sortDirection);
+    const result = await super.findAll(queryDto, customWhere, orderBy);
 
     const dataWithRelations = await Promise.all(
       result.data.map(async (professional) => {
@@ -232,5 +265,25 @@ export class HealthProfessionalService extends BaseService<
 
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('healthProfessional', id);
+  }
+}
+
+function buildHealthProfessionalOrderBy(
+  sortField?: string,
+  direction: 'asc' | 'desc' = 'asc',
+) {
+  switch (sortField) {
+    case HealthProfessionalSortField.FULL_NAME:
+      return { user: { fullName: direction } };
+    case HealthProfessionalSortField.CPF:
+      return { user: { cpf: direction } };
+    case HealthProfessionalSortField.EMAIL:
+      return { email: direction };
+    case HealthProfessionalSortField.SPECIALITY:
+      return { speciality: direction };
+    case HealthProfessionalSortField.CREATED_AT:
+      return { createdAt: direction };
+    default:
+      return undefined;
   }
 }

@@ -14,7 +14,7 @@ import { UpdateResearcherDto } from './dto/update-researcher.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { SystemRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { FindResearchersQueryDto } from './dto/find-researchers-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 
 @Controller('researcher')
@@ -31,7 +31,7 @@ export class ResearcherController {
 
   @Get()
   @Roles([SystemRole.RESEARCHER])
-  findAll(@Query() queryDto: QueryDto) {
+  findAll(@Query() queryDto: FindResearchersQueryDto) {
     return this.researcherService.findAll(queryDto);
   }
 

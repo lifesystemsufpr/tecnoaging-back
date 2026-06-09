@@ -4,7 +4,10 @@ import { UpdateInstitutionDto } from './dto/update-institution.dto';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
 import { Prisma } from '@prisma/client';
-import { FindInstitutionsQueryDto } from './dto/find-institution-query.dto';
+import {
+  FindInstitutionsQueryDto,
+  InstitutionSortField,
+} from './dto/find-institution-query.dto';
 
 @Injectable()
 export class InstitutionService {
@@ -27,32 +30,34 @@ export class InstitutionService {
     const {
       page = 1,
       pageSize = 10,
-      search,
       active,
       title,
-      orderBy,
-      sortOrder,
+      sortField,
+      sortDirection = 'asc',
     } = query;
 
     const where: Prisma.InstitutionWhereInput = {
       AND: [
-        title ? { title: { contains: title, mode: 'insensitive' } } : {},
+        title
+          ? {
+              title_normalized: {
+                contains: normalizeString(title),
+                mode: 'insensitive',
+              },
+            }
+          : {},
         active !== undefined ? { active } : { active: true },
       ],
-      OR: search
-        ? [
-            { title: { contains: search, mode: 'insensitive' } },
-            { title_normalized: { contains: search, mode: 'insensitive' } },
-          ]
-        : undefined,
     };
+
+    const orderBy = buildInstitutionOrderBy(sortField, sortDirection);
 
     const [institutions, total] = await Promise.all([
       this.prisma.institution.findMany({
         where,
         take: Number(pageSize),
         skip: (Number(page) - 1) * Number(pageSize),
-        orderBy: { [orderBy || 'title']: sortOrder || 'asc' },
+        orderBy,
       }),
       this.prisma.institution.count({ where }),
     ]);
@@ -131,4 +136,16 @@ export class InstitutionService {
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('institution', id);
   }
+}
+
+const INSTITUTION_SORTABLE_FIELDS = new Set<string>(
+  Object.values(InstitutionSortField),
+);
+
+function buildInstitutionOrderBy(
+  sortField?: string,
+  direction: 'asc' | 'desc' = 'asc',
+) {
+  if (!sortField || !INSTITUTION_SORTABLE_FIELDS.has(sortField)) return undefined;
+  return { [sortField]: direction };
 }

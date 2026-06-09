@@ -21,7 +21,7 @@ import { CreateManagerDto } from './dto/create-manager.dto';
 import { UpdateManagerDto } from './dto/update-manager.dto';
 import { UpdateManagerProfileDto } from './dto/update-manager-profile.dto';
 import { ManagerProfileDto } from './dto/manager-profile.dto';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { FindManagersQueryDto } from './dto/find-managers-query.dto';
 import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { Payload } from '../auth/interfaces/auth.interface';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
@@ -40,7 +40,7 @@ export class ManagerController {
 
   @Get()
   @Roles([SystemRole.MANAGER])
-  findAll(@Query() queryDto: QueryDto) {
+  findAll(@Query() queryDto: FindManagersQueryDto) {
     return this.managerService.findAll(queryDto);
   }
 
