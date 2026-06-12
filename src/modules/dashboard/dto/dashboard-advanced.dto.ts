@@ -57,6 +57,11 @@ export class MonthlyHistoryDto {
 export class DashboardSummaryDto {
   @ApiProperty()
   totalPatients: number;
+  @ApiProperty({
+    type: Object,
+    description: 'Distribuição de pacientes únicos por sexo',
+  })
+  patientsByGender: { MALE: number; FEMALE: number };
   @ApiProperty()
   totalEvaluations: number;
   @ApiProperty()
@@ -70,7 +75,12 @@ export class CurrentMonthEvaluationsDto {
   currentMonth: string; // yyyy-MM
   @ApiProperty()
   totalEvaluations: number;
-  @ApiProperty({ type: Object })
+  @ApiProperty({ description: 'Pacientes únicos atendidos no mês' })
+  totalPatients: number;
+  @ApiProperty({
+    type: Object,
+    description: 'Distribuição de pacientes únicos por sexo',
+  })
   byGender: { MALE: number; FEMALE: number };
 }
 
