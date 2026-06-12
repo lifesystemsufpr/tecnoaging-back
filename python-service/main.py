@@ -449,7 +449,7 @@ def processar_sts(payload: Dict[str, Any]):
         "potencia_media_global": media_potencia_por_ciclo,
         "energia_total": energia_total,
         "tempo_total_acumulado": float(tempo_cel[fim_mov] - tempo_cel[inicio_mov]),
-        "classificacao": ""
+        "classificacao": classificacao
       },
       "detalhes_ciclos": df_out.to_dict(orient='records'),
       "timeseries_processada": timeseries_out
