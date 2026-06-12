@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import { cleanCpf } from 'src/shared/functions/cpf';
 import {
   FindResearchersQueryDto,
   ResearcherSortField,
@@ -102,13 +103,22 @@ export class ResearcherService extends BaseService<
     const customWhere = {
       active: true,
       ...(institutionId ? { institutionId } : {}),
-      ...(email ? { email: { contains: email, mode: 'insensitive' as const } } : {}),
+      ...(email
+        ? { email: { contains: email, mode: 'insensitive' as const } }
+        : {}),
       ...(fieldOfStudy
-        ? { fieldOfStudy: { contains: fieldOfStudy, mode: 'insensitive' as const } }
+        ? {
+            fieldOfStudy: {
+              contains: fieldOfStudy,
+              mode: 'insensitive' as const,
+            },
+          }
         : {}),
       user: {
         active: true,
-        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(cpf
+          ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' as const } }
+          : {}),
         ...(fullName
           ? {
               fullName_normalized: {

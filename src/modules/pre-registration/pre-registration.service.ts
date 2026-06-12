@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PreRegistration } from '@prisma/client';
 import { fromZonedTime } from 'date-fns-tz';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
+import { cleanCpf } from 'src/shared/functions/cpf';
 import { CreatePreRegistrationDto } from './dto/create-pre-registration.dto';
 
 @Injectable()
@@ -22,8 +23,9 @@ export class PreRegistrationService {
   }
 
   async findByCpf(cpf: string): Promise<PreRegistration> {
+    // Aceita CPF com ou sem máscara
     const preRegistration = await this.prisma.preRegistration.findUnique({
-      where: { cpf },
+      where: { cpf: cleanCpf(cpf) },
     });
 
     if (!preRegistration) {
