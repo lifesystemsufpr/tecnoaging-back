@@ -14,7 +14,10 @@ export class FindInstitutionsQueryDto extends PaginationDto {
   @IsString()
   title?: string;
 
-  @ApiProperty({ required: false, description: 'Filtrar por status ativo/inativo' })
+  @ApiProperty({
+    required: false,
+    description: 'Filtrar por status ativo/inativo',
+  })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
