@@ -38,7 +38,10 @@ export class FindHealthcareUnitsQueryDto extends PaginationDto {
   @IsString()
   zipCode?: string;
 
-  @ApiProperty({ required: false, description: 'Filtrar por status ativo/inativo' })
+  @ApiProperty({
+    required: false,
+    description: 'Filtrar por status ativo/inativo',
+  })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()

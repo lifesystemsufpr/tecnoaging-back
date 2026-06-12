@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PaginationDto } from '../dto/pagination.dto';
 import { normalizeString } from '../functions/normalize-string';
+import { cleanCpf } from '../functions/cpf';
 
 type PrismaDelegate = {
   findMany: (args: any) => Prisma.PrismaPromise<any[]>;
@@ -34,7 +35,11 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
     additionalWhere: WhereInput<T> = {},
     orderBy?: any,
   ) {
-    const { search, page = 1, pageSize = 10 } = queryDto as PaginationDto & {
+    const {
+      search,
+      page = 1,
+      pageSize = 10,
+    } = queryDto as PaginationDto & {
       search?: string;
     };
 
@@ -64,9 +69,12 @@ export abstract class BaseService<T extends PrismaDelegate, TransformedEntity> {
         }
 
         if (isNonNormalized) {
+          // CPF é armazenado sem máscara: busca com máscara também deve funcionar
+          const searchValue =
+            fieldName === 'cpf' ? cleanCpf(rawSearch) || rawSearch : rawSearch;
           const whereClause = {
             [fieldName]: {
-              contains: rawSearch,
+              contains: searchValue,
               mode: 'insensitive',
             },
           };

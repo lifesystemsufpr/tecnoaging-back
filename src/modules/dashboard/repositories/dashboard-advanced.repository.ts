@@ -62,6 +62,8 @@ export class DashboardAdvancedRepository {
     return this.prisma.$queryRaw<any[]>`
       SELECT
         COUNT(DISTINCT p.id) as total_patients,
+        COUNT(DISTINCT p.id) FILTER (WHERE u.gender = 'MALE') as male_patients,
+        COUNT(DISTINCT p.id) FILTER (WHERE u.gender = 'FEMALE') as female_patients,
         COUNT(e.id) as total_evaluations,
         COUNT(e.id) FILTER (WHERE DATE_TRUNC('month', e.date) = DATE_TRUNC('month', CURRENT_DATE)) as current_month_evaluations
       FROM "evaluation" e
@@ -76,12 +78,13 @@ export class DashboardAdvancedRepository {
     healthProfessionalId: string,
     gender?: Gender,
   ) {
-    // Query para card mês
+    // Query para card mês — pacientes contados de forma única (não por avaliação)
     return this.prisma.$queryRaw<any[]>`
       SELECT
         COUNT(*) as total_evaluations,
-        COUNT(*) FILTER (WHERE u.gender = 'MALE') as male,
-        COUNT(*) FILTER (WHERE u.gender = 'FEMALE') as female,
+        COUNT(DISTINCT p.id) as total_patients,
+        COUNT(DISTINCT p.id) FILTER (WHERE u.gender = 'MALE') as male,
+        COUNT(DISTINCT p.id) FILTER (WHERE u.gender = 'FEMALE') as female,
         TO_CHAR(DATE_TRUNC('month', CURRENT_DATE), 'YYYY-MM') as current_month
       FROM "evaluation" e
       JOIN "participant" p ON e."participantId" = p.id

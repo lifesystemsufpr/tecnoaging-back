@@ -145,7 +145,7 @@ describe('AllExceptionsFilter', () => {
     expect(ctx.reply?.body).toMatchObject({
       statusCode: 409,
       error: 'Conflict',
-      message: 'Unique constraint failed on the fields: cpf',
+      message: 'Já existe um cadastro com este CPF.',
       details: { code: 'P2002', target: ['cpf'] },
     });
   });
@@ -195,7 +195,7 @@ describe('AllExceptionsFilter', () => {
     expect(ctx.reply?.status).toBe(401);
     expect(ctx.reply?.body).toMatchObject({
       statusCode: 401,
-      message: 'Token expired',
+      message: 'Sessão expirada. Faça login novamente.',
       details: { code: 'TOKEN_EXPIRED' },
     });
   });
@@ -223,7 +223,7 @@ describe('AllExceptionsFilter', () => {
     expect(ctx.reply?.status).toBe(500);
     expect(ctx.reply?.body).toMatchObject({
       statusCode: 500,
-      message: 'Internal server error',
+      message: 'Erro interno do servidor.',
       error: 'Internal Server Error',
     });
     expect(ctx.reply?.body.details).toBeUndefined();

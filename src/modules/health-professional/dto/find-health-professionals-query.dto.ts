@@ -32,7 +32,11 @@ export class FindHealthProfessionalsQueryDto extends PaginationDto {
   @IsString()
   speciality?: string;
 
-  @ApiProperty({ required: false, enum: Gender, description: 'Filtrar por gênero' })
+  @ApiProperty({
+    required: false,
+    enum: Gender,
+    description: 'Filtrar por gênero',
+  })
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
@@ -46,7 +50,11 @@ export class FindHealthProfessionalsQueryDto extends PaginationDto {
   @IsString()
   sortField?: string;
 
-  @ApiProperty({ required: false, enum: ['asc', 'desc'], description: 'Direção da ordenação' })
+  @ApiProperty({
+    required: false,
+    enum: ['asc', 'desc'],
+    description: 'Direção da ordenação',
+  })
   @IsOptional()
   @IsString()
   sortDirection?: 'asc' | 'desc' = 'asc';

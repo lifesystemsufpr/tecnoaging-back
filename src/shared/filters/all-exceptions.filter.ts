@@ -21,6 +21,14 @@ interface ErrorBody {
   [key: string]: unknown;
 }
 
+// Nomes amigáveis (em português) para campos com restrição de unicidade.
+const UNIQUE_FIELD_LABELS: Record<string, string> = {
+  cpf: 'CPF',
+  email: 'e-mail',
+  title: 'nome',
+  name: 'nome',
+};
+
 const STATUS_TEXT: Record<number, string> = {
   400: 'Bad Request',
   401: 'Unauthorized',
@@ -87,7 +95,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof Prisma.PrismaClientValidationError) {
       return {
         ...this.baseEnvelope(HttpStatus.BAD_REQUEST, path, timestamp),
-        message: 'Invalid database query parameters.',
+        message: 'Parâmetros de consulta inválidos.',
         details: { code: 'PRISMA_VALIDATION' },
       };
     }
@@ -95,7 +103,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof TokenExpiredError) {
       return {
         ...this.baseEnvelope(HttpStatus.UNAUTHORIZED, path, timestamp),
-        message: 'Token expired',
+        message: 'Sessão expirada. Faça login novamente.',
         details: { code: 'TOKEN_EXPIRED' },
       };
     }
@@ -103,14 +111,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof JsonWebTokenError) {
       return {
         ...this.baseEnvelope(HttpStatus.UNAUTHORIZED, path, timestamp),
-        message: 'Invalid token',
+        message: 'Token inválido.',
         details: { code: 'INVALID_TOKEN' },
       };
     }
 
     const body: ErrorBody = {
       ...this.baseEnvelope(HttpStatus.INTERNAL_SERVER_ERROR, path, timestamp),
-      message: 'Internal server error',
+      message: 'Erro interno do servidor.',
     };
 
     if (!isProd && exception instanceof Error) {
@@ -130,13 +138,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
     timestamp: string,
   ): ErrorBody {
     const target = (exception.meta?.target ?? null) as string | string[] | null;
-    const targetText = Array.isArray(target) ? target.join(', ') : target;
 
     switch (exception.code) {
       case 'P2002': {
-        const message = targetText
-          ? `Unique constraint failed on the fields: ${targetText}`
-          : 'Unique constraint failed';
+        let fields: string[] = [];
+        if (Array.isArray(target)) {
+          fields = target;
+        } else if (target) {
+          fields = [target];
+        }
+        const labels = fields.map(
+          (field) => UNIQUE_FIELD_LABELS[field] ?? field,
+        );
+        const message =
+          labels.length > 0
+            ? `Já existe um cadastro com este ${labels.join(' e ')}.`
+            : 'Já existe um cadastro com estes dados.';
         return {
           ...this.baseEnvelope(HttpStatus.CONFLICT, path, timestamp),
           message,
@@ -146,25 +163,26 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case 'P2003':
         return {
           ...this.baseEnvelope(HttpStatus.CONFLICT, path, timestamp),
-          message: 'Foreign key constraint failed.',
+          message:
+            'Este registro está vinculado a outros dados e não pode ser alterado ou removido.',
           details: { code: 'P2003', target },
         };
       case 'P2025':
         return {
           ...this.baseEnvelope(HttpStatus.NOT_FOUND, path, timestamp),
-          message: 'Record not found',
+          message: 'Registro não encontrado.',
           details: { code: 'P2025' },
         };
       case 'P2000':
         return {
           ...this.baseEnvelope(HttpStatus.BAD_REQUEST, path, timestamp),
-          message: 'Value too long for column.',
+          message: 'Valor muito longo para um dos campos.',
           details: { code: 'P2000' },
         };
       default:
         return {
           ...this.baseEnvelope(HttpStatus.BAD_REQUEST, path, timestamp),
-          message: 'Database request error.',
+          message: 'Erro ao processar a solicitação no banco de dados.',
           details: { code: exception.code },
         };
     }

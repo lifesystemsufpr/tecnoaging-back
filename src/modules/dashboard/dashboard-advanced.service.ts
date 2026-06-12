@@ -19,6 +19,8 @@ type MonthlyHistoryRow = {
 
 type DashboardSummaryRow = {
   total_patients: number;
+  male_patients: number;
+  female_patients: number;
   total_evaluations: number;
   current_month_evaluations: number;
 };
@@ -26,6 +28,7 @@ type DashboardSummaryRow = {
 type CurrentMonthRow = {
   current_month: string;
   total_evaluations: number;
+  total_patients: number;
   male: number;
   female: number;
 };
@@ -126,6 +129,10 @@ export class DashboardAdvancedService {
     )) as DashboardSummaryRow[];
     return {
       totalPatients: Number(summary.total_patients),
+      patientsByGender: {
+        MALE: Number(summary.male_patients),
+        FEMALE: Number(summary.female_patients),
+      },
       totalEvaluations: Number(summary.total_evaluations),
       currentMonthEvaluations: Number(summary.current_month_evaluations),
     };
@@ -142,6 +149,7 @@ export class DashboardAdvancedService {
     return {
       currentMonth: data.current_month,
       totalEvaluations: Number(data.total_evaluations),
+      totalPatients: Number(data.total_patients),
       byGender: {
         MALE: Number(data.male),
         FEMALE: Number(data.female),
