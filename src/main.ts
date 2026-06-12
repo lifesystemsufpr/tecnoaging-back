@@ -17,6 +17,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import cookieParser = require('cookie-parser');
 import { NormalizationPipe } from './shared/pipes/normalization.pipe';
+import { SanitizationPipe } from './shared/pipes/sanitization.pipe';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import basicAuth = require('express-basic-auth');
 
@@ -55,6 +56,7 @@ async function bootstrap() {
 
   // Validation
   app.useGlobalPipes(
+    new SanitizationPipe(),
     new ValidationPipe({
       whitelist: true,
       transform: true,
