@@ -33,6 +33,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
+    if (!user.active) {
+      this.logger.warn(`Blocked request from inactive user ${user.id}`);
+      throw new UnauthorizedException('Conta desativada');
+    }
+
     return {
       id: user.id,
       cpf: user.cpf,
