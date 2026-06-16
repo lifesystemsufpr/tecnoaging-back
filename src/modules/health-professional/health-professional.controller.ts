@@ -17,6 +17,9 @@ import { Public } from '../auth/decorators/public.decorator';
 import { SystemRole } from '@prisma/client';
 import { FindHealthProfessionalsQueryDto } from './dto/find-health-professionals-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
 
 @Controller('health-professional')
 @ApiBearerAuth()
@@ -60,7 +63,17 @@ export class HealthProfessionalController {
   @Delete(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  remove(@Param('id') id: string) {
-    return this.healthProfessionalService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeactivateDto,
+    @RequestUser() user: Payload,
+  ) {
+    return this.healthProfessionalService.remove(id, user.id, dto.reason);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles([SystemRole.MANAGER])
+  reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
+    return this.healthProfessionalService.reactivate(id, user.id);
   }
 }

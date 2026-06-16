@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import { cleanCpf } from 'src/shared/functions/cpf';
 import {
   FindResearchersQueryDto,
   ResearcherSortField,
@@ -102,13 +103,22 @@ export class ResearcherService extends BaseService<
     const customWhere = {
       active: true,
       ...(institutionId ? { institutionId } : {}),
-      ...(email ? { email: { contains: email, mode: 'insensitive' as const } } : {}),
+      ...(email
+        ? { email: { contains: email, mode: 'insensitive' as const } }
+        : {}),
       ...(fieldOfStudy
-        ? { fieldOfStudy: { contains: fieldOfStudy, mode: 'insensitive' as const } }
+        ? {
+            fieldOfStudy: {
+              contains: fieldOfStudy,
+              mode: 'insensitive' as const,
+            },
+          }
         : {}),
       user: {
         active: true,
-        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(cpf
+          ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' as const } }
+          : {}),
         ...(fullName
           ? {
               fullName_normalized: {
@@ -206,7 +216,7 @@ export class ResearcherService extends BaseService<
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, performedById: string, reason?: string) {
     const relationInfo = await this.checkDeletability(id);
 
     try {
@@ -218,7 +228,17 @@ export class ResearcherService extends BaseService<
             include: { user: true, institution: true },
           });
 
-          await this.userService.update(id, { active: false }, tx);
+          await tx.user.update({
+            where: { id },
+            data: {
+              active: false,
+              deactivatedAt: new Date(),
+              deactivatedBy: performedById,
+              deactivationReason: reason ?? null,
+              reactivatedAt: null,
+              reactivatedBy: null,
+            },
+          });
 
           return researcher;
         },
@@ -243,14 +263,21 @@ export class ResearcherService extends BaseService<
     }
   }
 
-  async reactivate(id: string) {
+  async reactivate(id: string, performedById: string) {
     return this.prisma.$transaction(async (tx) => {
       const researcher = await tx.researcher.update({
         where: { id },
         data: { active: true },
       });
 
-      await this.userService.update(id, { active: true }, tx);
+      await tx.user.update({
+        where: { id },
+        data: {
+          active: true,
+          reactivatedAt: new Date(),
+          reactivatedBy: performedById,
+        },
+      });
 
       return researcher;
     });

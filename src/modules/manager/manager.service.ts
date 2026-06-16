@@ -7,6 +7,7 @@ import { ManagerProfileDto } from './dto/manager-profile.dto';
 import { Prisma, SystemRole, User } from '@prisma/client';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import { cleanCpf } from 'src/shared/functions/cpf';
 import {
   FindManagersQueryDto,
   ManagerSortField,
@@ -55,7 +56,7 @@ export class ManagerService {
       ...(gender ? { gender } : {}),
       ...(phone ? { phone: { contains: phone, mode: 'insensitive' } } : {}),
       AND: [
-        cpf ? { cpf: { contains: cpf, mode: 'insensitive' } } : {},
+        cpf ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' } } : {},
         fullName
           ? {
               fullName_normalized: {
@@ -118,7 +119,9 @@ export class ManagerService {
   }
 }
 
-const MANAGER_SORTABLE_FIELDS = new Set<string>(Object.values(ManagerSortField));
+const MANAGER_SORTABLE_FIELDS = new Set<string>(
+  Object.values(ManagerSortField),
+);
 
 function buildManagerOrderBy(
   sortField?: string,

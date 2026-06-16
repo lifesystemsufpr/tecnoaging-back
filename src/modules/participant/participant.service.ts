@@ -11,6 +11,7 @@ import { Participant, Prisma, SystemRole, User } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BaseService } from 'src/shared/services/base.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import { cleanCpf } from 'src/shared/functions/cpf';
 import {
   FindParticipantsQueryDto,
   ParticipantSortField,
@@ -95,17 +96,32 @@ export class ParticipantService extends BaseService<
 
     const customWhere = {
       active: true,
-      ...(city ? { city: { contains: city, mode: 'insensitive' as const } } : {}),
-      ...(state ? { state: { contains: state, mode: 'insensitive' as const } } : {}),
-      ...(neighborhood
-        ? { neighborhood: { contains: neighborhood, mode: 'insensitive' as const } }
+      ...(city
+        ? { city: { contains: city, mode: 'insensitive' as const } }
         : {}),
-      ...(zipCode ? { zipCode: { contains: zipCode, mode: 'insensitive' as const } } : {}),
+      ...(state
+        ? { state: { contains: state, mode: 'insensitive' as const } }
+        : {}),
+      ...(neighborhood
+        ? {
+            neighborhood: {
+              contains: neighborhood,
+              mode: 'insensitive' as const,
+            },
+          }
+        : {}),
+      ...(zipCode
+        ? { zipCode: { contains: zipCode, mode: 'insensitive' as const } }
+        : {}),
       ...(scholarship ? { scholarship } : {}),
-      ...(socioEconomicLevel ? { socio_economic_level: socioEconomicLevel } : {}),
+      ...(socioEconomicLevel
+        ? { socio_economic_level: socioEconomicLevel }
+        : {}),
       user: {
         active: true,
-        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(cpf
+          ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' as const } }
+          : {}),
         ...(fullName
           ? {
               fullName_normalized: {
@@ -238,7 +254,7 @@ export class ParticipantService extends BaseService<
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, performedById: string, reason?: string) {
     const relationInfo = await this.checkDeletability(id);
 
     try {
@@ -252,7 +268,14 @@ export class ParticipantService extends BaseService<
 
           await tx.user.update({
             where: { id },
-            data: { active: false },
+            data: {
+              active: false,
+              deactivatedAt: new Date(),
+              deactivatedBy: performedById,
+              deactivationReason: reason ?? null,
+              reactivatedAt: null,
+              reactivatedBy: null,
+            },
           });
 
           return participant;
@@ -278,14 +301,21 @@ export class ParticipantService extends BaseService<
     }
   }
 
-  async reactivate(id: string) {
+  async reactivate(id: string, performedById: string) {
     return this.prisma.$transaction(async (tx) => {
       const participant = await tx.participant.update({
         where: { id },
         data: { active: true },
       });
 
-      await this.userService.update(id, { active: true }, tx);
+      await tx.user.update({
+        where: { id },
+        data: {
+          active: true,
+          reactivatedAt: new Date(),
+          reactivatedBy: performedById,
+        },
+      });
 
       return participant;
     });

@@ -33,12 +33,19 @@ export class FindResearchersQueryDto extends PaginationDto {
   @IsString()
   fieldOfStudy?: string;
 
-  @ApiProperty({ required: false, enum: Gender, description: 'Filtrar por gênero' })
+  @ApiProperty({
+    required: false,
+    enum: Gender,
+    description: 'Filtrar por gênero',
+  })
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
 
-  @ApiProperty({ required: false, description: 'Filtrar por ID da instituição' })
+  @ApiProperty({
+    required: false,
+    description: 'Filtrar por ID da instituição',
+  })
   @IsOptional()
   @IsString()
   institutionId?: string;
@@ -52,7 +59,11 @@ export class FindResearchersQueryDto extends PaginationDto {
   @IsString()
   sortField?: string;
 
-  @ApiProperty({ required: false, enum: ['asc', 'desc'], description: 'Direção da ordenação' })
+  @ApiProperty({
+    required: false,
+    enum: ['asc', 'desc'],
+    description: 'Direção da ordenação',
+  })
   @IsOptional()
   @IsString()
   sortDirection?: 'asc' | 'desc' = 'asc';

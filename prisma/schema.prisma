@@ -22,6 +22,13 @@ model User {
   passwordResetExpiresAt DateTime?
   passwordResetUsedAt    DateTime?
 
+  // Deactivation audit
+  deactivatedAt      DateTime?
+  deactivatedBy      String?
+  deactivationReason String?
+  reactivatedAt      DateTime?
+  reactivatedBy      String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -75,6 +82,12 @@ model Institution {
   title            String
   title_normalized String  @default("") @db.Text
   active           Boolean @default(true)
+
+  deactivatedAt      DateTime?
+  deactivatedBy      String?
+  deactivationReason String?
+  reactivatedAt      DateTime?
+  reactivatedBy      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -207,6 +220,18 @@ model EvaluationCycle {
   @@map("evaluation_cycle")
 }
 
+model PreRegistration {
+  id        String   @id @default(uuid())
+  cpf       String   @unique
+  fullName  String
+  birthday  DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("pre_registration")
+}
+
 model HealthcareUnit {
   id              String  @id @default(uuid())
   name            String
@@ -219,6 +244,12 @@ model HealthcareUnit {
   state           String
   neighborhood    String
   active          Boolean @default(true)
+
+  deactivatedAt      DateTime?
+  deactivatedBy      String?
+  deactivationReason String?
+  reactivatedAt      DateTime?
+  reactivatedBy      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

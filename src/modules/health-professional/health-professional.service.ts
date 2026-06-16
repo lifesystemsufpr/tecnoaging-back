@@ -10,6 +10,7 @@ import { UserService } from '../users/user.service';
 import { HealthProfessional, Prisma, SystemRole, User } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
+import { cleanCpf } from 'src/shared/functions/cpf';
 import {
   FindHealthProfessionalsQueryDto,
   HealthProfessionalSortField,
@@ -96,7 +97,9 @@ export class HealthProfessionalService extends BaseService<
 
     const customWhere = {
       active: true,
-      ...(email ? { email: { contains: email, mode: 'insensitive' as const } } : {}),
+      ...(email
+        ? { email: { contains: email, mode: 'insensitive' as const } }
+        : {}),
       ...(speciality
         ? {
             speciality_normalized: {
@@ -107,7 +110,9 @@ export class HealthProfessionalService extends BaseService<
         : {}),
       user: {
         active: true,
-        ...(cpf ? { cpf: { contains: cpf, mode: 'insensitive' as const } } : {}),
+        ...(cpf
+          ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' as const } }
+          : {}),
         ...(fullName
           ? {
               fullName_normalized: {
@@ -120,7 +125,13 @@ export class HealthProfessionalService extends BaseService<
       },
     };
 
-    const orderBy = buildHealthProfessionalOrderBy(sortField, sortDirection);
+    // Sem ordenação explícita, mostra os cadastros mais recentes primeiro
+    const orderBy = buildHealthProfessionalOrderBy(
+      sortField,
+      sortDirection,
+    ) ?? {
+      createdAt: 'desc' as const,
+    };
     const result = await super.findAll(queryDto, customWhere, orderBy);
 
     const dataWithRelations = await Promise.all(
@@ -213,7 +224,7 @@ export class HealthProfessionalService extends BaseService<
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, performedById: string, reason?: string) {
     const relationInfo = await this.checkDeletability(id);
 
     try {
@@ -225,7 +236,17 @@ export class HealthProfessionalService extends BaseService<
             include: { user: true },
           });
 
-          await this.userService.update(id, { active: false }, tx);
+          await tx.user.update({
+            where: { id },
+            data: {
+              active: false,
+              deactivatedAt: new Date(),
+              deactivatedBy: performedById,
+              deactivationReason: reason ?? null,
+              reactivatedAt: null,
+              reactivatedBy: null,
+            },
+          });
 
           return healthProfessional;
         },
@@ -250,14 +271,21 @@ export class HealthProfessionalService extends BaseService<
     }
   }
 
-  async reactivate(id: string) {
+  async reactivate(id: string, performedById: string) {
     return this.prisma.$transaction(async (tx) => {
       const healthProfessional = await tx.healthProfessional.update({
         where: { id },
         data: { active: true },
       });
 
-      await this.userService.update(id, { active: true }, tx);
+      await tx.user.update({
+        where: { id },
+        data: {
+          active: true,
+          reactivatedAt: new Date(),
+          reactivatedBy: performedById,
+        },
+      });
 
       return healthProfessional;
     });

@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { SystemRole, Prisma, User } from '@prisma/client';
@@ -20,6 +16,20 @@ export class UserService {
   ): Promise<Omit<User, 'password'>> {
     const prisma = tx || this.prisma;
     const { password, fullName, ...userData } = request;
+
+    // CPFs de cadastros desativados (soft delete) não aparecem nas listagens,
+    // mas continuam ocupando a constraint única — o conflito precisa dizer isso.
+    const existing = await prisma.user.findUnique({
+      where: { cpf: userData.cpf },
+      select: { active: true },
+    });
+    if (existing) {
+      throw new ConflictException(
+        existing.active
+          ? 'Já existe um cadastro com este CPF.'
+          : 'Este CPF pertence a um cadastro desativado. Reative o cadastro existente em vez de criar um novo.',
+      );
+    }
 
     const hashedPassword = await hashPassword(password);
     const normalizedFullName = normalizeString(fullName) || '';
@@ -42,13 +52,9 @@ export class UserService {
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === 'P2002'
       ) {
-        throw new ConflictException(
-          'O e-mail ou CPF fornecido já está em uso.',
-        );
+        throw new ConflictException('Já existe um cadastro com este CPF.');
       }
-      throw new InternalServerErrorException(
-        'Não foi possível criar o usuário.',
-      );
+      throw err;
     }
   }
 

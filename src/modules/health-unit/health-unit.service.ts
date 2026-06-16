@@ -139,13 +139,20 @@ export class HealthUnitService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, performedById: string, reason?: string) {
     const relationInfo = await this.checkDeletability(id);
 
     try {
       const deactivatedUnit = await this.prisma.healthcareUnit.update({
         where: { id },
-        data: { active: false },
+        data: {
+          active: false,
+          deactivatedAt: new Date(),
+          deactivatedBy: performedById,
+          deactivationReason: reason ?? null,
+          reactivatedAt: null,
+          reactivatedBy: null,
+        },
       });
 
       return {
@@ -165,7 +172,7 @@ export class HealthUnitService {
     }
   }
 
-  async restore(id: string) {
+  async restore(id: string, performedById: string) {
     const healthUnit = await this.prisma.healthcareUnit.findFirst({
       where: { id, active: false },
     });
@@ -178,7 +185,11 @@ export class HealthUnitService {
 
     return await this.prisma.healthcareUnit.update({
       where: { id },
-      data: { active: true },
+      data: {
+        active: true,
+        reactivatedAt: new Date(),
+        reactivatedBy: performedById,
+      },
     });
   }
 
