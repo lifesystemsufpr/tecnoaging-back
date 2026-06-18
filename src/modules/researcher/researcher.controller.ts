@@ -38,6 +38,12 @@ export class ResearcherController {
     return this.researcherService.findAll(queryDto);
   }
 
+  @Get('/population')
+  @Roles([SystemRole.RESEARCHER])
+  async population(@RequestUser() user: Payload) {
+    return this.researcherService.getResearcherPopulationData(user.id);
+  }
+
   @Get(':id')
   @Roles([SystemRole.RESEARCHER])
   findOne(@Param('id') id: string) {

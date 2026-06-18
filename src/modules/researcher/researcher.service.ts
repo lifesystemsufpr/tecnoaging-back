@@ -21,6 +21,15 @@ import {
   FindResearchersQueryDto,
   ResearcherSortField,
 } from './dto/find-researchers-query.dto';
+import { ResearcherKpi } from './dto/researcher-kpi.dto';
+import {
+  ResearcherEvaluationsData,
+  ResearcherParticipantsData,
+} from './interfaces/researcher.interface';
+import { getAgeDistribution } from './helpers/getAgeDistribution.helper';
+import { getEducationLevel } from './helpers/getEducationLevel';
+import { getAge } from './helpers/getAge';
+import { getEvaluationsByHealthcareUnit } from './helpers/getEvaluationsByHealthcareUnit';
 
 type ResearcherWithDetails = Researcher & {
   user: User;
@@ -285,6 +294,137 @@ export class ResearcherService extends BaseService<
 
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('researcher', id);
+  }
+
+  async getResearcherPopulationData(researcherId: string) {
+    const researcher = await this.prisma.researcher.findUnique({
+      where: {
+        id: researcherId,
+      },
+    });
+
+    if (!researcher) {
+      throw new NotFoundException(
+        "Pesquisador não foi encontrado durante a busca de KPI's",
+      );
+    }
+
+    const sixtyYearsAgo = new Date();
+    sixtyYearsAgo.setFullYear(sixtyYearsAgo.getFullYear() - 59);
+
+    const participants = (await this.prisma.participant.findMany({
+      select: {
+        socio_economic_level: true,
+        scholarship: true,
+        birthday: true,
+        active: true,
+        user: {
+          select: {
+            gender: true,
+          },
+        },
+      },
+      where: {
+        birthday: {
+          lte: sixtyYearsAgo,
+        },
+      },
+    })) as ResearcherParticipantsData[];
+
+    const evaluations = (await this.prisma.evaluation.findMany({
+      select: {
+        id: true,
+        healthcareUnit: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    })) as ResearcherEvaluationsData[];
+
+    const kpis = this.getResearcherKPI(participants);
+    const charts = this.getResearcherCharts(participants, evaluations);
+
+    return {
+      kpis,
+      charts,
+    };
+  }
+
+  getResearcherCharts(
+    participants: ResearcherParticipantsData[],
+    evaluations: ResearcherEvaluationsData[],
+  ) {
+    const ageDistribution = getAgeDistribution(participants);
+    const educationLevel = getEducationLevel(participants);
+    const evaluationsByInstitution =
+      getEvaluationsByHealthcareUnit(evaluations);
+
+    return { ageDistribution, educationLevel, evaluationsByInstitution };
+  }
+
+  getResearcherKPI(participants: ResearcherParticipantsData[]) {
+    const totalParticipants = participants.length;
+
+    const ages = participants.map((participant) => {
+      return getAge(participant.birthday);
+    });
+
+    const averageAge = ages.reduce((sum, age) => sum + age, 0) / ages.length;
+
+    const variance =
+      ages.reduce((sum, age) => {
+        return sum + Math.pow(age - averageAge, 2);
+      }, 0) / ages.length;
+
+    const standardDeviation = Math.sqrt(variance);
+
+    const activeAbsolute = participants.filter(
+      (participant) => participant.active,
+    ).length;
+
+    const activePercentage =
+      totalParticipants > 0 ? (activeAbsolute / totalParticipants) * 100 : 0;
+
+    const maleAbsolute = participants.filter(
+      (participant) => participant.user.gender === 'MALE',
+    ).length;
+
+    const femaleAbsolute = participants.filter(
+      (participant) => participant.user.gender === 'FEMALE',
+    ).length;
+
+    const malePercentage =
+      totalParticipants > 0 ? (maleAbsolute / totalParticipants) * 100 : 0;
+
+    const femalePercentage =
+      totalParticipants > 0 ? (femaleAbsolute / totalParticipants) * 100 : 0;
+
+    return {
+      totalParticipants,
+
+      age: {
+        average: Number(averageAge.toFixed(2)),
+        standardDeviation: Number(standardDeviation.toFixed(2)),
+      },
+
+      activeParticipants: {
+        absolute: activeAbsolute,
+        percentage: Number(activePercentage.toFixed(2)),
+      },
+
+      genderDistribution: {
+        male: {
+          absolute: maleAbsolute,
+          percentage: Number(malePercentage.toFixed(2)),
+        },
+        female: {
+          absolute: femaleAbsolute,
+          percentage: Number(femalePercentage.toFixed(2)),
+        },
+      },
+    };
   }
 }
 
