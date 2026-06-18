@@ -30,6 +30,7 @@ import { getAgeDistribution } from './helpers/getAgeDistribution.helper';
 import { getEducationLevel } from './helpers/getEducationLevel';
 import { getAge } from './helpers/getAge';
 import { getEvaluationsByHealthcareUnit } from './helpers/getEvaluationsByHealthcareUnit';
+import { getParticipantsPerUbs } from './helpers/getParticipantsPerUbs';
 
 type ResearcherWithDetails = Researcher & {
   user: User;
@@ -334,6 +335,7 @@ export class ResearcherService extends BaseService<
     const evaluations = (await this.prisma.evaluation.findMany({
       select: {
         id: true,
+        participantId: true,
         healthcareUnit: {
           select: {
             id: true,
@@ -358,10 +360,12 @@ export class ResearcherService extends BaseService<
   ) {
     const ageDistribution = getAgeDistribution(participants);
     const educationLevel = getEducationLevel(participants);
-    const evaluationsByInstitution =
-      getEvaluationsByHealthcareUnit(evaluations);
+    const participantPerUbs = getParticipantsPerUbs(
+      evaluations,
+      participants.length,
+    );
 
-    return { ageDistribution, educationLevel, evaluationsByInstitution };
+    return { ageDistribution, educationLevel, participantPerUbs };
   }
 
   getResearcherKPI(participants: ResearcherParticipantsData[]) {

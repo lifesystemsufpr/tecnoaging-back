@@ -10,6 +10,7 @@ export interface ResearcherParticipantsData {
 
 export interface ResearcherEvaluationsData {
   id: string;
+  participantId: string;
   healthcareUnit: {
     id: string;
     name: string;
