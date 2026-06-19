@@ -1,5 +1,6 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
+import { DashboardAdvancedService } from './dashboard-advanced.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
@@ -14,12 +15,27 @@ import { RoleGuard } from '../auth/guards/role-guard.guard';
 import { Payload } from '../auth/interfaces/auth.interface';
 import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { MobileDashboardResponseDto } from './dto';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RoleGuard)
 @ApiStandardErrors()
 export class DashboardController {
-  constructor(private dashboardService: DashboardService) {}
+  constructor(
+    private dashboardService: DashboardService,
+    private dashboardAdvancedService: DashboardAdvancedService,
+  ) {}
+
+  @Get('mobile')
+  @Roles([
+    SystemRole.RESEARCHER,
+    SystemRole.HEALTH_PROFESSIONAL,
+  ])
+  async getMobileDashboard(
+    @RequestUser() user: Payload,
+  ): Promise<MobileDashboardResponseDto> {
+    return this.dashboardAdvancedService.getMobileDashboard(user.id);
+  }
 
   @Get('participant/evaluations-count')
   @Roles([

@@ -53,6 +53,7 @@ import {
   PercentileEntryDto,
   TestType,
 } from './dto/dashboard-advanced.dto';
+import { MobileDashboardResponseDto } from './dto/mobile-dashboard.dto';
 
 @Injectable()
 export class DashboardAdvancedService {
@@ -173,6 +174,154 @@ export class DashboardAdvancedService {
       total: Number(item.total),
       average: Number(item.average),
     }));
+  }
+
+  async getMobileDashboard(
+    healthProfessionalId: string,
+  ): Promise<MobileDashboardResponseDto> {
+    const [summary] = (await this.repository.getDashboardSummary(
+      healthProfessionalId,
+    )) as DashboardSummaryRow[];
+
+    const totalPatients = Number(summary?.total_patients || 0);
+    const malePatients = Number(summary?.male_patients || 0);
+    const femalePatients = Number(summary?.female_patients || 0);
+    const totalTestsApplied = Number(summary?.total_evaluations || 0);
+
+    const monthlyHistoryRows = (await this.repository.getMonthlyHistory(
+      healthProfessionalId,
+    )) as MonthlyHistoryRow[];
+
+    const months = getLastTwelveMonths();
+    const currentMonthStr = months[11];
+    const previousMonthStr = months[10];
+
+    const currentMonthData = monthlyHistoryRows.find(
+      (r) => r.month === currentMonthStr,
+    );
+    const previousMonthData = monthlyHistoryRows.find(
+      (r) => r.month === previousMonthStr,
+    );
+
+    const evaluationsCurrentMonth = currentMonthData
+      ? Number(currentMonthData.total)
+      : 0;
+    const evaluationsPreviousMonth = previousMonthData
+      ? Number(previousMonthData.total)
+      : 0;
+
+    let percentageChange = 0;
+    if (evaluationsPreviousMonth > 0) {
+      percentageChange =
+        ((evaluationsCurrentMonth - evaluationsPreviousMonth) /
+          evaluationsPreviousMonth) *
+        100;
+    } else if (evaluationsCurrentMonth > 0) {
+      percentageChange = 100;
+    }
+
+    const testTypes = (await this.repository.getEvaluationsByTestAndGender(
+      healthProfessionalId,
+    )) as TestAndGenderRow[];
+
+    let sts30 = 0;
+    let mst2 = 0;
+
+    for (const row of testTypes) {
+      const total = Number(row.total);
+      if (row.test === 'TTSTS') sts30 += total;
+      else if (row.test === 'TMSTS') mst2 += total;
+    }
+
+    let globalAverage = 0;
+    let validMonths = 0;
+    for (const m of monthlyHistoryRows) {
+      if (m.average) {
+        globalAverage += Number(m.average);
+        validMonths++;
+      }
+    }
+    globalAverage = validMonths > 0 ? globalAverage / validMonths : 0;
+
+    const now = new Date();
+
+    return {
+      evaluations: {
+        currentMonth: evaluationsCurrentMonth,
+        previousMonth: evaluationsPreviousMonth,
+        percentageChange: Math.round(percentageChange * 10) / 10,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        timezone: 'America/Sao_Paulo',
+      },
+      averages: {
+        global: {
+          value: Math.round(globalAverage * 10) / 10,
+          percentageChange: 0, // Not explicitly tracked yet
+          trend: 'up',
+        },
+        individual: {
+          value: Math.round(globalAverage * 10) / 10,
+          percentageChange: 0,
+          trend: 'up',
+        },
+      },
+      monthlyHistory: {
+        timezone: 'America/Sao_Paulo',
+        data: months.map((m) => {
+          const row = monthlyHistoryRows.find((r) => r.month === m);
+          const [yyyy, mm] = m.split('-');
+          const monthNames = [
+            'Jan',
+            'Fev',
+            'Mar',
+            'Abr',
+            'Mai',
+            'Jun',
+            'Jul',
+            'Ago',
+            'Set',
+            'Out',
+            'Nov',
+            'Dez',
+          ];
+          const monthIndex = parseInt(mm, 10) - 1;
+          const yy = yyyy.substring(2);
+          return {
+            monthLabel: `${monthNames[monthIndex]}/${yy}`,
+            month: parseInt(mm, 10),
+            year: parseInt(yyyy, 10),
+            total: row ? Number(row.total) : 0,
+          };
+        }),
+      },
+      genderDistribution: {
+        total: totalPatients,
+        male: malePatients,
+        malePercentage:
+          totalPatients > 0 ? Math.round((malePatients / totalPatients) * 100) : 0,
+        female: femalePatients,
+        femalePercentage:
+          totalPatients > 0
+            ? Math.round((femalePatients / totalPatients) * 100)
+            : 0,
+      },
+      totalTestsApplied: totalTestsApplied,
+      totalQuestionnairesApplied: 0, // To be implemented when questionnaires are added
+      testTypeDistribution: {
+        total: totalTestsApplied,
+        sts30: sts30,
+        sts30Percentage:
+          totalTestsApplied > 0
+            ? Math.round((sts30 / totalTestsApplied) * 100)
+            : 0,
+        mst2: mst2,
+        mst2Percentage:
+          totalTestsApplied > 0
+            ? Math.round((mst2 / totalTestsApplied) * 100)
+            : 0,
+      },
+    };
   }
 }
 
