@@ -1,8 +1,13 @@
 import { ResearcherEvaluationsData } from '../interfaces/researcher.interface';
 
+type EvaluationsByHealthcareUnit = {
+  institution: string;
+  evaluations: number;
+}
+
 export const getEvaluationsByHealthcareUnit = (
   evaluations: ResearcherEvaluationsData[],
-) => {
+): EvaluationsByHealthcareUnit[] => {
   const grouped = evaluations.reduce(
     (acc, evaluation) => {
       const institution = evaluation.healthcareUnit.name;

@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 
 export class AgeKpi {
   @ApiProperty({
@@ -71,4 +72,24 @@ export class ResearcherKpi {
     type: GenderDistributionKpi,
   })
   genderDistribution: GenderDistributionKpi;
+}
+
+export class GetKPIQueryParams {
+  @ApiProperty({
+    description: 'start date for KPI data',
+    example: '2024-01-01',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiProperty({
+    description: 'end date for KPI data',
+    example: '2024-01-01',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
 }

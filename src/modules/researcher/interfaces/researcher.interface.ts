@@ -11,6 +11,8 @@ export interface ResearcherParticipantsData {
 export interface ResearcherEvaluationsData {
   id: string;
   participantId: string;
+  date: Date;
+  type: string;
   healthcareUnit: {
     id: string;
     name: string;

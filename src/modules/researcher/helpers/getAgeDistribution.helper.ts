@@ -1,9 +1,14 @@
 import { ResearcherParticipantsData } from '../interfaces/researcher.interface';
 import { getAge } from './getAge';
 
+type AgeDistribution = {
+  label: string;
+  value: number;
+}
+
 export const getAgeDistribution = (
   participants: ResearcherParticipantsData[],
-) => {
+): AgeDistribution[] => {
   const buckets = {
     '60-64': 0,
     '65-69': 0,

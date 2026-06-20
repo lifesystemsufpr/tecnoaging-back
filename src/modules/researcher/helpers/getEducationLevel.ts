@@ -13,9 +13,14 @@ const SCHOLARSHIP_LABELS: Record<string, string> = {
   DOCTORATE: 'Doutorado',
 };
 
+type EducationLevel = {
+  label: string;
+  value: number;
+}
+
 export const getEducationLevel = (
   participants: ResearcherParticipantsData[],
-) => {
+): EducationLevel[] => {
   const grouped = new Map<string, number>();
 
   participants.forEach((participant) => {
