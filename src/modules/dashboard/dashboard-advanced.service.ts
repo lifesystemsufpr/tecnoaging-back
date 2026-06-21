@@ -23,6 +23,8 @@ type DashboardSummaryRow = {
   female_patients: number;
   total_evaluations: number;
   current_month_evaluations: number;
+  male_evaluations?: number;
+  female_evaluations?: number;
 };
 
 type CurrentMonthRow = {
@@ -187,6 +189,8 @@ export class DashboardAdvancedService {
     const malePatients = Number(summary?.male_patients || 0);
     const femalePatients = Number(summary?.female_patients || 0);
     const totalTestsApplied = Number(summary?.total_evaluations || 0);
+    const maleEvaluations = Number(summary?.male_evaluations || 0);
+    const femaleEvaluations = Number(summary?.female_evaluations || 0);
 
     const monthlyHistoryRows = (await this.repository.getMonthlyHistory(
       healthProfessionalId,
@@ -296,14 +300,14 @@ export class DashboardAdvancedService {
         }),
       },
       genderDistribution: {
-        total: totalPatients,
-        male: malePatients,
+        total: totalTestsApplied,
+        male: maleEvaluations,
         malePercentage:
-          totalPatients > 0 ? Math.round((malePatients / totalPatients) * 100) : 0,
-        female: femalePatients,
+          totalTestsApplied > 0 ? Math.round((maleEvaluations / totalTestsApplied) * 100) : 0,
+        female: femaleEvaluations,
         femalePercentage:
-          totalPatients > 0
-            ? Math.round((femalePatients / totalPatients) * 100)
+          totalTestsApplied > 0
+            ? Math.round((femaleEvaluations / totalTestsApplied) * 100)
             : 0,
       },
       totalTestsApplied: totalTestsApplied,
