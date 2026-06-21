@@ -1182,6 +1182,7 @@ export class EvaluationService extends BaseService<
         participant: { active: true },
       },
       select: {
+        participantId: true,
         participant: {
           select: {
             user: {
@@ -1194,11 +1195,22 @@ export class EvaluationService extends BaseService<
       },
     });
 
+    // Conta pacientes únicos: um participante com várias avaliações no mês
+    // deve aparecer apenas uma vez no total e na distribuição por sexo.
+    const seenParticipants = new Map<string, string | null>();
+    for (const evaluation of evaluations) {
+      if (!seenParticipants.has(evaluation.participantId)) {
+        seenParticipants.set(
+          evaluation.participantId,
+          evaluation.participant.user.gender,
+        );
+      }
+    }
+
     let male = 0;
     let female = 0;
 
-    for (const evaluation of evaluations) {
-      const gender = evaluation.participant.user.gender;
+    for (const gender of seenParticipants.values()) {
       if (gender === 'MALE') male++;
       if (gender === 'FEMALE') female++;
     }
@@ -1207,7 +1219,7 @@ export class EvaluationService extends BaseService<
       timezone: DASHBOARD_TIMEZONE,
       month,
       year,
-      total: evaluations.length,
+      total: seenParticipants.size,
       male,
       female,
     };
