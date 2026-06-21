@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class DashboardAdvancedRepository {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAverageTestByAgeGroup(gender?: Gender) {
     // Box plot 30STS (TTSTS) por faixa etária — escopo populacional
@@ -65,6 +65,8 @@ export class DashboardAdvancedRepository {
         COUNT(DISTINCT p.id) FILTER (WHERE u.gender = 'MALE') as male_patients,
         COUNT(DISTINCT p.id) FILTER (WHERE u.gender = 'FEMALE') as female_patients,
         COUNT(e.id) as total_evaluations,
+        COUNT(e.id) FILTER (WHERE u.gender = 'MALE') as male_evaluations,
+        COUNT(e.id) FILTER (WHERE u.gender = 'FEMALE') as female_evaluations,
         COUNT(e.id) FILTER (WHERE DATE_TRUNC('month', e.date) = DATE_TRUNC('month', CURRENT_DATE)) as current_month_evaluations
       FROM "evaluation" e
       JOIN "participant" p ON e."participantId" = p.id

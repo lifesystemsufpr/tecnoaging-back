@@ -19,6 +19,7 @@ import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.dec
 import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { Payload } from '../auth/interfaces/auth.interface';
 import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
+import { GetKPIQueryParams } from './dto/researcher-kpi.dto';
 
 @Controller('researcher')
 @ApiBearerAuth()
@@ -36,6 +37,24 @@ export class ResearcherController {
   @Roles([SystemRole.RESEARCHER])
   findAll(@Query() queryDto: FindResearchersQueryDto) {
     return this.researcherService.findAll(queryDto);
+  }
+
+  @Get('/population')
+  @Roles([SystemRole.RESEARCHER])
+  async population(
+    @Query() query: GetKPIQueryParams,
+    @RequestUser() user: Payload,
+  ) {
+    return this.researcherService.getResearcherPopulationData(user.id, query);
+  }
+
+  @Get('/evaluations')
+  @Roles([SystemRole.RESEARCHER])
+  async evaluations(
+    @Query() query: GetKPIQueryParams,
+    @RequestUser() user: Payload,
+  ) {
+    return this.researcherService.getResearcherEvaluationsData(user.id, query);
   }
 
   @Get(':id')

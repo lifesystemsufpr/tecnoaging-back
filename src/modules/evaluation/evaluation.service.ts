@@ -1070,7 +1070,7 @@ export class EvaluationService extends BaseService<
     const difference = Number(((individual ?? 0) - teamAverage).toFixed(2));
 
     return {
-      individual,
+      individual: individual ?? 0,
       teamAverage,
       difference,
       hasIndividualData,

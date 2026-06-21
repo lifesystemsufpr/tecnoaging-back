@@ -21,6 +21,18 @@ import {
   FindResearchersQueryDto,
   ResearcherSortField,
 } from './dto/find-researchers-query.dto';
+import { GetKPIQueryParams } from './dto/researcher-kpi.dto';
+import {
+  ResearcherEvaluationsData,
+  ResearcherParticipantsData,
+} from './interfaces/researcher.interface';
+import { getAgeDistribution } from './helpers/getAgeDistribution.helper';
+import { getEducationLevel } from './helpers/getEducationLevel';
+import { getAge } from './helpers/getAge';
+import { getEvaluationsByHealthcareUnit } from './helpers/getEvaluationsByHealthcareUnit';
+import { getParticipantsPerUbs } from './helpers/getParticipantsPerUbs';
+import { getTemporalEvolution } from './helpers/getTemporalEvolution';
+import { getEvaluationsByTestType } from './helpers/getEvaluationsByType';
 
 type ResearcherWithDetails = Researcher & {
   user: User;
@@ -285,6 +297,273 @@ export class ResearcherService extends BaseService<
 
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('researcher', id);
+  }
+
+  async getResearcherPopulationData(
+    researcherId: string,
+    params: GetKPIQueryParams,
+  ) {
+    const researcher = await this.prisma.researcher.findUnique({
+      where: {
+        id: researcherId,
+      },
+    });
+
+    if (!researcher) {
+      throw new NotFoundException(
+        "Pesquisador não foi encontrado durante a busca de KPI's",
+      );
+    }
+
+    const participants = await this.getParticipants(researcherId);
+
+    const evaluations = await this.getEvaluations(
+      researcherId,
+      params.startDate,
+      params.endDate,
+    );
+
+    const kpis = this.getParticipantsKPI(participants);
+    const charts = this.getParticipantCharts(participants, evaluations);
+
+    return {
+      kpis,
+      charts,
+    };
+  }
+
+  async getResearcherEvaluationsData(
+    researcherId: string,
+    params: GetKPIQueryParams,
+  ) {
+    const researcher = await this.prisma.researcher.findUnique({
+      where: { id: researcherId },
+    });
+
+    if (!researcher) {
+      throw new NotFoundException(
+        'Pesquisador não foi encontrado durante a busca das informações de avaliações!',
+      );
+    }
+
+    const evaluations = await this.getEvaluations(
+      researcherId,
+      params.startDate,
+      params.endDate,
+    );
+    const participants = await this.getParticipants(researcherId);
+
+    const kpis = this.getEvaluationsKPI(evaluations, participants.length);
+    const charts = this.getEvaluationCharts(evaluations);
+
+    return {
+      kpis,
+      charts,
+    };
+  }
+
+  private getParticipantCharts(
+    participants: ResearcherParticipantsData[],
+    evaluations: ResearcherEvaluationsData[],
+  ) {
+    const ageDistribution = getAgeDistribution(participants);
+    const educationLevel = getEducationLevel(participants);
+    const participantPerUbs = getParticipantsPerUbs(
+      evaluations,
+      participants.length,
+    );
+
+    return { ageDistribution, educationLevel, participantPerUbs };
+  }
+
+  private getEvaluationCharts(evaluations: ResearcherEvaluationsData[]) {
+    const evaluationsByInstitution =
+      getEvaluationsByHealthcareUnit(evaluations);
+    const temporalEvaluation = getTemporalEvolution(evaluations);
+    const evaluationsByTypeTest = getEvaluationsByTestType(evaluations);
+
+    return {
+      evaluationsByInstitution,
+      temporalEvaluation,
+      evaluationsByTypeTest,
+    };
+  }
+
+  private getParticipantsKPI(participants: ResearcherParticipantsData[]) {
+    const totalParticipants = participants.length;
+
+    const ages = participants.map((participant) => {
+      return getAge(participant.birthday);
+    });
+
+    const averageAge = ages.reduce((sum, age) => sum + age, 0) / ages.length;
+
+    const variance =
+      ages.reduce((sum, age) => {
+        return sum + Math.pow(age - averageAge, 2);
+      }, 0) / ages.length;
+
+    const standardDeviation = Math.sqrt(variance);
+
+    const activeAbsolute = participants.filter(
+      (participant) => participant.active,
+    ).length;
+
+    const activePercentage =
+      totalParticipants > 0 ? (activeAbsolute / totalParticipants) * 100 : 0;
+
+    const maleAbsolute = participants.filter(
+      (participant) => participant.user.gender === 'MALE',
+    ).length;
+
+    const femaleAbsolute = participants.filter(
+      (participant) => participant.user.gender === 'FEMALE',
+    ).length;
+
+    const malePercentage =
+      totalParticipants > 0 ? (maleAbsolute / totalParticipants) * 100 : 0;
+
+    const femalePercentage =
+      totalParticipants > 0 ? (femaleAbsolute / totalParticipants) * 100 : 0;
+
+    return {
+      totalParticipants,
+
+      age: {
+        average: Number(averageAge.toFixed(2)),
+        standardDeviation: Number(standardDeviation.toFixed(2)),
+      },
+
+      activeParticipants: {
+        absolute: activeAbsolute,
+        percentage: Number(activePercentage.toFixed(2)),
+      },
+
+      genderDistribution: {
+        male: {
+          absolute: maleAbsolute,
+          percentage: Number(malePercentage.toFixed(2)),
+        },
+        female: {
+          absolute: femaleAbsolute,
+          percentage: Number(femalePercentage.toFixed(2)),
+        },
+      },
+    };
+  }
+
+  private getEvaluationsKPI(
+    evaluations: ResearcherEvaluationsData[],
+    totalParticipants: number,
+  ) {
+    const totalEvaluations = evaluations.length;
+
+    // Participantes únicos que possuem ao menos 1 avaliação
+    const participantEvaluationCount = new Map<string, number>();
+
+    for (const evaluation of evaluations) {
+      participantEvaluationCount.set(
+        evaluation.participantId,
+        (participantEvaluationCount.get(evaluation.participantId) ?? 0) + 1,
+      );
+    }
+
+    const evaluatedParticipantsAbsolute = participantEvaluationCount.size;
+
+    const evaluatedParticipantsPercentage =
+      totalParticipants > 0
+        ? Number(
+            ((evaluatedParticipantsAbsolute / totalParticipants) * 100).toFixed(
+              2,
+            ),
+          )
+        : 0;
+
+    // Quantidade de avaliações por participante
+    const evaluationsPerParticipant = [...participantEvaluationCount.values()];
+
+    const average =
+      evaluationsPerParticipant.length > 0
+        ? evaluationsPerParticipant.reduce((acc, value) => acc + value, 0) /
+          evaluationsPerParticipant.length
+        : 0;
+
+    const variance =
+      evaluationsPerParticipant.length > 0
+        ? evaluationsPerParticipant.reduce((acc, value) => {
+            return acc + Math.pow(value - average, 2);
+          }, 0) / evaluationsPerParticipant.length
+        : 0;
+
+    const standardDeviation = Math.sqrt(variance);
+
+    return {
+      totalEvaluations: {
+        absolute: totalEvaluations,
+        percentageSystem: 100,
+      },
+      evaluatedParticipants: {
+        absolute: evaluatedParticipantsAbsolute,
+        percentageTotal: evaluatedParticipantsPercentage,
+      },
+      evaluationsPerParticipant: {
+        average: Number(average.toFixed(2)),
+        standardDeviation: Number(standardDeviation.toFixed(2)),
+      },
+    };
+  }
+
+  private async getParticipants(researcherId: string) {
+    const sixtyYearsAgo = new Date();
+    sixtyYearsAgo.setFullYear(sixtyYearsAgo.getFullYear() - 59);
+
+    return this.prisma.participant.findMany({
+      select: {
+        socio_economic_level: true,
+        scholarship: true,
+        birthday: true,
+        active: true,
+        user: {
+          select: {
+            gender: true,
+          },
+        },
+      },
+      where: {
+        birthday: {
+          lte: sixtyYearsAgo,
+        },
+      },
+    }) as Promise<ResearcherParticipantsData[]>;
+  }
+
+  private async getEvaluations(
+    researcherId: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
+    const where: Prisma.EvaluationWhereInput = {};
+    if (startDate || endDate) {
+      where.date = {
+        ...(startDate ? { gte: new Date(startDate) } : {}),
+        ...(endDate ? { lte: new Date(endDate) } : {}),
+      } as unknown as Prisma.DateTimeFilter;
+    }
+    return this.prisma.evaluation.findMany({
+      where,
+      select: {
+        id: true,
+        participantId: true,
+        date: true,
+        type: true,
+        healthcareUnit: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    }) as Promise<ResearcherEvaluationsData[]>;
   }
 }
 
