@@ -317,14 +317,23 @@ export class ResearcherService extends BaseService<
 
     const participants = await this.getParticipants(researcherId);
 
+    const participantIds = new Set(
+      participants.map((participant) => participant.id),
+    );
+
     const evaluations = await this.getEvaluations(
       researcherId,
+      Array.from(participantIds),
       params.startDate,
       params.endDate,
     );
 
-    const kpis = this.getParticipantsKPI(participants);
-    const charts = this.getParticipantCharts(participants, evaluations);
+    const kpis = this.getParticipantsKPI(participants, evaluations);
+    const charts = this.getParticipantCharts(
+      participants,
+      evaluations,
+      kpis.activeParticipants.absolute,
+    );
 
     return {
       kpis,
@@ -346,12 +355,17 @@ export class ResearcherService extends BaseService<
       );
     }
 
+    const participants = await this.getParticipants(researcherId);
+    const participantIds = new Set(
+      participants.map((participant) => participant.id),
+    );
+
     const evaluations = await this.getEvaluations(
       researcherId,
+      Array.from(participantIds),
       params.startDate,
       params.endDate,
     );
-    const participants = await this.getParticipants(researcherId);
 
     const kpis = this.getEvaluationsKPI(evaluations, participants.length);
     const charts = this.getEvaluationCharts(evaluations);
@@ -365,12 +379,13 @@ export class ResearcherService extends BaseService<
   private getParticipantCharts(
     participants: ResearcherParticipantsData[],
     evaluations: ResearcherEvaluationsData[],
+    activeParticipants: number,
   ) {
     const ageDistribution = getAgeDistribution(participants);
     const educationLevel = getEducationLevel(participants);
     const participantPerUbs = getParticipantsPerUbs(
       evaluations,
-      participants.length,
+      activeParticipants,
     );
 
     return { ageDistribution, educationLevel, participantPerUbs };
@@ -389,7 +404,10 @@ export class ResearcherService extends BaseService<
     };
   }
 
-  private getParticipantsKPI(participants: ResearcherParticipantsData[]) {
+  private getParticipantsKPI(
+    participants: ResearcherParticipantsData[],
+    evaluations: ResearcherEvaluationsData[],
+  ) {
     const totalParticipants = participants.length;
 
     const ages = participants.map((participant) => {
@@ -405,9 +423,11 @@ export class ResearcherService extends BaseService<
 
     const standardDeviation = Math.sqrt(variance);
 
-    const activeAbsolute = participants.filter(
-      (participant) => participant.active,
-    ).length;
+    const activeAbsolute = participants.filter((participant) => {
+      return (
+        evaluations.filter((e) => e.participantId === participant.id).length > 0
+      );
+    }).length;
 
     const activePercentage =
       totalParticipants > 0 ? (activeAbsolute / totalParticipants) * 100 : 0;
@@ -519,6 +539,7 @@ export class ResearcherService extends BaseService<
 
     return this.prisma.participant.findMany({
       select: {
+        id: true,
         socio_economic_level: true,
         scholarship: true,
         birthday: true,
@@ -539,10 +560,15 @@ export class ResearcherService extends BaseService<
 
   private async getEvaluations(
     researcherId: string,
+    participantsIds: string[],
     startDate?: string,
     endDate?: string,
   ) {
     const where: Prisma.EvaluationWhereInput = {};
+    where.participantId = {
+      in: participantsIds,
+    };
+
     if (startDate || endDate) {
       where.date = {
         ...(startDate ? { gte: new Date(startDate) } : {}),
