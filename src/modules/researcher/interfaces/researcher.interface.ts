@@ -1,4 +1,5 @@
 export interface ResearcherParticipantsData {
+  id: string;
   socio_economic_level: string;
   scholarship: string;
   birthday: Date;
