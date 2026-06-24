@@ -126,8 +126,7 @@ export class EvaluationController {
   @Roles([SystemRole.MANAGER, SystemRole.RESEARCHER])
   @ApiOkResponse()
   @ApiNotFoundResponse({
-    description:
-      'Evaluation not found or has no pending sensor data to process.',
+    description: 'Evaluation not found or has no sensor data to process.',
   })
   @ApiConflictResponse({
     description: 'Evaluation is already being processed.',
