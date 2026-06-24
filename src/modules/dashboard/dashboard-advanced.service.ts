@@ -25,6 +25,9 @@ type DashboardSummaryRow = {
   current_month_evaluations: number;
   male_evaluations?: number;
   female_evaluations?: number;
+  total_processed_evaluations?: number;
+  male_processed_evaluations?: number;
+  female_processed_evaluations?: number;
 };
 
 type CurrentMonthRow = {
@@ -59,7 +62,7 @@ import { MobileDashboardResponseDto } from './dto/mobile-dashboard.dto';
 
 @Injectable()
 export class DashboardAdvancedService {
-  constructor(private repository: DashboardAdvancedRepository) {}
+  constructor(private repository: DashboardAdvancedRepository) { }
 
   async getAverageTestByAgeGroup(
     gender?: Gender,
@@ -185,12 +188,12 @@ export class DashboardAdvancedService {
       healthProfessionalId,
     )) as DashboardSummaryRow[];
 
-    const totalPatients = Number(summary?.total_patients || 0);
-    const malePatients = Number(summary?.male_patients || 0);
-    const femalePatients = Number(summary?.female_patients || 0);
+
     const totalTestsApplied = Number(summary?.total_evaluations || 0);
-    const maleEvaluations = Number(summary?.male_evaluations || 0);
-    const femaleEvaluations = Number(summary?.female_evaluations || 0);
+    const totalTestsProcessed = Number(summary?.total_processed_evaluations || 0);
+    const totalTestsUnprocessed = totalTestsApplied - totalTestsProcessed;
+    const maleEvaluations = Number(summary?.male_processed_evaluations || 0);
+    const femaleEvaluations = Number(summary?.female_processed_evaluations || 0);
 
     const monthlyHistoryRows = (await this.repository.getMonthlyHistory(
       healthProfessionalId,
@@ -237,15 +240,22 @@ export class DashboardAdvancedService {
       else if (row.test === 'TMSTS') mst2 += total;
     }
 
-    let globalAverage = 0;
+    let individualAverage = 0;
     let validMonths = 0;
     for (const m of monthlyHistoryRows) {
       if (m.average) {
-        globalAverage += Number(m.average);
+        individualAverage += Number(m.average);
         validMonths++;
       }
     }
-    globalAverage = validMonths > 0 ? globalAverage / validMonths : 0;
+    individualAverage = validMonths > 0 ? individualAverage / validMonths : 0;
+
+    const [systemMetrics] = (await this.repository.getSystemGlobalMetrics()) as any[];
+    const totalSystemProfessionals = Number(systemMetrics?.total_professionals || 0);
+    const totalSystemProcessed = Number(systemMetrics?.total_processed_evaluations || 0);
+    const globalAverage = totalSystemProfessionals > 0
+      ? totalSystemProcessed / totalSystemProfessionals
+      : 0;
 
     const now = new Date();
 
@@ -265,7 +275,7 @@ export class DashboardAdvancedService {
           trend: 'up',
         },
         individual: {
-          value: Math.round(globalAverage * 10) / 10,
+          value: Math.round(individualAverage * 10) / 10,
           percentageChange: 0,
           trend: 'up',
         },
@@ -300,29 +310,31 @@ export class DashboardAdvancedService {
         }),
       },
       genderDistribution: {
-        total: totalTestsApplied,
+        total: totalTestsProcessed,
         male: maleEvaluations,
         malePercentage:
-          totalTestsApplied > 0 ? Math.round((maleEvaluations / totalTestsApplied) * 100) : 0,
+          totalTestsProcessed > 0 ? Math.round((maleEvaluations / totalTestsProcessed) * 100) : 0,
         female: femaleEvaluations,
         femalePercentage:
-          totalTestsApplied > 0
-            ? Math.round((femaleEvaluations / totalTestsApplied) * 100)
+          totalTestsProcessed > 0
+            ? Math.round((femaleEvaluations / totalTestsProcessed) * 100)
             : 0,
       },
       totalTestsApplied: totalTestsApplied,
+      totalTestsProcessed: totalTestsProcessed,
+      totalTestsUnprocessed: totalTestsUnprocessed,
       totalQuestionnairesApplied: 0, // To be implemented when questionnaires are added
       testTypeDistribution: {
-        total: totalTestsApplied,
+        total: totalTestsProcessed,
         sts30: sts30,
         sts30Percentage:
-          totalTestsApplied > 0
-            ? Math.round((sts30 / totalTestsApplied) * 100)
+          totalTestsProcessed > 0
+            ? Math.round((sts30 / totalTestsProcessed) * 100)
             : 0,
         mst2: mst2,
         mst2Percentage:
-          totalTestsApplied > 0
-            ? Math.round((mst2 / totalTestsApplied) * 100)
+          totalTestsProcessed > 0
+            ? Math.round((mst2 / totalTestsProcessed) * 100)
             : 0,
       },
     };

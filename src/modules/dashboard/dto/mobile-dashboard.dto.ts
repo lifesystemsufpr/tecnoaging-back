@@ -52,6 +52,8 @@ export class MobileDashboardResponseDto {
   monthlyHistory: MobileMonthlyHistoryDto;
   genderDistribution: MobileGenderDistributionDto;
   totalTestsApplied: number;
+  totalTestsProcessed: number;
+  totalTestsUnprocessed: number;
   totalQuestionnairesApplied: number;
   testTypeDistribution: MobileTestTypeDistributionDto;
 }
