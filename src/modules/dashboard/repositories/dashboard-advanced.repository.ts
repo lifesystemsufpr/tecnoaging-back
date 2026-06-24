@@ -67,8 +67,12 @@ export class DashboardAdvancedRepository {
         COUNT(e.id) as total_evaluations,
         COUNT(e.id) FILTER (WHERE u.gender = 'MALE') as male_evaluations,
         COUNT(e.id) FILTER (WHERE u.gender = 'FEMALE') as female_evaluations,
-        COUNT(e.id) FILTER (WHERE DATE_TRUNC('month', e.date) = DATE_TRUNC('month', CURRENT_DATE)) as current_month_evaluations
+        COUNT(e.id) FILTER (WHERE DATE_TRUNC('month', e.date) = DATE_TRUNC('month', CURRENT_DATE)) as current_month_evaluations,
+        COUNT(ei.id) as total_processed_evaluations,
+        COUNT(ei.id) FILTER (WHERE u.gender = 'MALE') as male_processed_evaluations,
+        COUNT(ei.id) FILTER (WHERE u.gender = 'FEMALE') as female_processed_evaluations
       FROM "evaluation" e
+      LEFT JOIN "evaluation_indicators" ei ON e.id = ei."evaluationId"
       JOIN "participant" p ON e."participantId" = p.id
       JOIN "user" u ON p.id = u.id
       WHERE e."healthProfessionalId" = ${healthProfessionalId}
@@ -118,6 +122,14 @@ export class DashboardAdvancedRepository {
         ${gender ? Prisma.sql`AND u.gender = ${gender}` : Prisma.empty}
       GROUP BY e.type, u.gender
       ORDER BY total DESC;
+    `;
+  }
+
+  async getSystemGlobalMetrics() {
+    return this.prisma.$queryRaw<any[]>`
+      SELECT 
+        (SELECT COUNT(*) FROM "health_professional") as total_professionals,
+        (SELECT COUNT(*) FROM "evaluation_indicators") as total_processed_evaluations
     `;
   }
 }

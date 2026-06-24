@@ -97,6 +97,18 @@ export class EvaluationController {
     return this.evaluationService.findOne(id);
   }
 
+  @Get(':id/result')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER, SystemRole.PARTICIPANT])
+  @ApiOkResponse({
+    description: 'Returns the classification and repetition count of the processed evaluation.',
+  })
+  @ApiNotFoundResponse({
+    description: 'Evaluation not found or has not been processed yet.',
+  })
+  findResult(@Param('id') id: string) {
+    return this.evaluationService.getResult(id);
+  }
+
   @Get(':id/repetitions/history')
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   async findRepetitions(@Param('id') id: string) {

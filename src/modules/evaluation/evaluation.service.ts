@@ -630,6 +630,33 @@ export class EvaluationService extends BaseService<
     return g;
   }
 
+  async getResult(id: string) {
+    const evaluation = await this.prisma.evaluation.findUnique({
+      where: { id },
+      include: {
+        indicators: {
+          select: {
+            classification: true,
+            repetitionCount: true,
+          },
+        },
+      },
+    });
+
+    if (!evaluation) {
+      throw new NotFoundException('Evaluation not found');
+    }
+
+    if (!evaluation.indicators) {
+      throw new NotFoundException('Evaluation has not been processed yet');
+    }
+
+    return {
+      classification: evaluation.indicators.classification,
+      repetitionCount: evaluation.indicators.repetitionCount,
+    };
+  }
+
   async findOne(id: string): Promise<EvaluationResponse> {
     const evaluation = await this.prisma.evaluation.findUniqueOrThrow({
       where: { id },
