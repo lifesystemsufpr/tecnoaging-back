@@ -7,7 +7,7 @@ import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { UserService } from '../users/user.service';
-import { Participant, Prisma, SystemRole, User } from '@prisma/client';
+import { Participant, Prisma, SystemRole, User, PreRegistration } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BaseService } from 'src/shared/services/base.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
@@ -171,7 +171,7 @@ export class ParticipantService extends BaseService<
       }),
     );
 
-    let preRegistrations = [];
+    let preRegistrations: PreRegistration[] = [];
     if (queryDto.page === undefined || queryDto.page === 1 || cpf || fullName) {
       preRegistrations = await this.prisma.preRegistration.findMany({
         where: {
