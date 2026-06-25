@@ -16,7 +16,11 @@ class STSProcessor:
         """
         self.raw_data = raw_data_list
         self.body_mass = float(peso)
-        self.h = float(altura)
+        # Normaliza a altura para METROS. A fórmula m*g*h espera metros,
+        # mas a altura frequentemente chega em cm (ex: 170). Sem isso,
+        # a energia/potência fica ~100x inflada.
+        altura = float(altura)
+        self.h = altura / 100.0 if altura > 3 else altura
         self.idade = int(idade)
         self.sexo = str(sexo)
         self.fs = 60.0  # Hz fixo do sensor

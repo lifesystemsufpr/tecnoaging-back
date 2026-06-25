@@ -7,7 +7,7 @@ import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { UserService } from '../users/user.service';
-import { Participant, Prisma, SystemRole, User } from '@prisma/client';
+import { Participant, Prisma, SystemRole, User, PreRegistration } from '@prisma/client';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { BaseService } from 'src/shared/services/base.service';
 import { normalizeString } from 'src/shared/functions/normalize-string';
@@ -19,7 +19,9 @@ import {
 
 type ParticipantWithUser = Participant & { user: User };
 export type ParticipantResponse = Omit<ParticipantWithUser, 'user'> &
-  Omit<User, 'password'>;
+  Omit<User, 'password'> & {
+    isPreRegistration?: boolean;
+  };
 
 @Injectable()
 export class ParticipantService extends BaseService<
@@ -75,6 +77,15 @@ export class ParticipantService extends BaseService<
           },
         },
       });
+
+      // Se existir pré-cadastro para esse CPF, nós deletamos
+      try {
+        await tx.preRegistration.delete({
+          where: { cpf: cleanCpf(userData.cpf) },
+        });
+      } catch (error) {
+        // Ignora caso não tenha encontrado pré-cadastro para deletar
+      }
 
       return { ...user, ...participant };
     });
@@ -158,9 +169,75 @@ export class ParticipantService extends BaseService<
       }),
     );
 
+    let preRegistrations: PreRegistration[] = [];
+    if (queryDto.page === undefined || queryDto.page === 1 || cpf || fullName) {
+      preRegistrations = await this.prisma.preRegistration.findMany({
+        where: {
+          ...(cpf
+            ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' as const } }
+            : {}),
+          ...(fullName
+            ? {
+                fullName: {
+                  contains: fullName,
+                  mode: 'insensitive' as const,
+                },
+              }
+            : {}),
+        },
+      });
+
+      if (preRegistrations.length > 0) {
+        const cpfs = preRegistrations.map((p) => p.cpf);
+        const existingUsers = await this.prisma.user.findMany({
+          where: { cpf: { in: cpfs } },
+          select: { cpf: true },
+        });
+        const existingCpfs = new Set(existingUsers.map((u) => u.cpf));
+        preRegistrations = preRegistrations.filter(
+          (p) => !existingCpfs.has(p.cpf),
+        );
+      }
+    }
+
+    const preRegFormatted: ParticipantResponse[] = preRegistrations.map((pr) => ({
+      id: pr.id,
+      cpf: pr.cpf,
+      fullName: pr.fullName,
+      birthday: pr.birthday,
+      city: '',
+      gender: 'OTHER' as any,
+      phone: null,
+      active: true,
+      isPreRegistration: true,
+      createdAt: pr.createdAt,
+      updatedAt: pr.updatedAt,
+      fullName_normalized: '',
+      role: 'PARTICIPANT' as any,
+      weight: 0,
+      height: 0,
+      zipCode: '',
+      street: '',
+      number: '',
+      complement: null,
+      state: '',
+      neighborhood: '',
+      socio_economic_level: 'C' as any,
+      scholarship: 'NONE' as any,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+      passwordResetUsedAt: null,
+      deactivatedAt: null,
+      deactivatedBy: null,
+      deactivationReason: null,
+      reactivatedAt: null,
+      reactivatedBy: null,
+      hasRelations: false,
+    }));
+
     return {
       ...result,
-      data: dataWithRelations,
+      data: [...preRegFormatted, ...dataWithRelations],
     };
   }
 

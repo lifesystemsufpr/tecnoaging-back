@@ -9,6 +9,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
+import { capitalizeName } from 'src/shared/functions/capitalize-name';
 import { cleanCpf } from 'src/shared/functions/cpf';
 import { IsCpf } from 'src/shared/validators/is-cpf.decorator';
 import { IsFullName } from 'src/shared/validators/is-full-name.decorator';
@@ -34,6 +35,9 @@ export class CreateUserDto {
   @IsString({ message: 'O nome deve ser um texto.' })
   @IsNotEmpty({ message: 'O nome completo é obrigatório.' })
   @IsFullName()
+  @Transform(({ value }): unknown =>
+    typeof value === 'string' ? capitalizeName(value) : value,
+  )
   fullName: string;
 
   @ApiProperty({
