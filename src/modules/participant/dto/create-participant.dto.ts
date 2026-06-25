@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsPositive,
   IsString,
   MaxDate,
   ValidateNested,
@@ -56,6 +57,7 @@ export class CreateParticipantDto {
   })
   @IsNotEmpty()
   @IsNumber()
+  @IsPositive({ message: 'O peso deve ser maior que zero.' })
   weight: number;
 
   @ApiProperty({
@@ -64,6 +66,7 @@ export class CreateParticipantDto {
   })
   @IsNotEmpty()
   @IsNumber()
+  @IsPositive({ message: 'A altura deve ser maior que zero.' })
   height: number;
 
   @ApiProperty({
