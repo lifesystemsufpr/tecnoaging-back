@@ -106,7 +106,6 @@ export class ParticipantService extends BaseService<
     } = queryDto;
 
     const customWhere = {
-      active: true,
       ...(city
         ? { city: { contains: city, mode: 'insensitive' as const } }
         : {}),
@@ -129,7 +128,6 @@ export class ParticipantService extends BaseService<
         ? { socio_economic_level: socioEconomicLevel }
         : {}),
       user: {
-        active: true,
         ...(cpf
           ? { cpf: { contains: cleanCpf(cpf), mode: 'insensitive' as const } }
           : {}),
