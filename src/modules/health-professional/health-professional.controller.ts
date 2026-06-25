@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { HealthProfessionalService } from './health-professional.service';
 import { CreateHealthProfessionalDto } from './dto/create-health-professional.dto';
-import { UpdateHealthProfessionalDto } from './dto/update-health-professional.dto';
+import { LinkParticipantDto, UpdateHealthProfessionalDto } from './dto/update-health-professional.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -20,6 +20,8 @@ import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.dec
 import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { Payload } from '../auth/interfaces/auth.interface';
 import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
 
 @Controller('health-professional')
 @ApiBearerAuth()
@@ -75,5 +77,14 @@ export class HealthProfessionalController {
   @Roles([SystemRole.MANAGER])
   reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
     return this.healthProfessionalService.reactivate(id, user.id);
+  }
+
+  @Post('link-participant')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL])
+  linkParticipant(
+    @RequestUser() user: Payload,
+    @Body() body: LinkParticipantDto,
+  ) {
+    return this.healthProfessionalService.linkParticipant(body, user.id);
   }
 }

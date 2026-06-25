@@ -1,24 +1,79 @@
-import { PrismaClient, QuestionType } from '@prisma/client';
+import {
+  PrismaClient,
+  QuestionType,
+} from '@prisma/client';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const prisma = new PrismaClient();
+const connectionString = `${process.env.DATABASE_URL}`;
+const pool = new Pool({
+  connectionString,
+  max: 10,
+  idleTimeoutMillis: 30000,
+});
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  console.log('🚀 Iniciando Seed de Produção (IVCF-20)...');
+  console.log('🌱 Iniciando o Seed Completo...');
 
-  // 1. TRAVA DE SEGURANÇA: Verificar se já existe
+  // ==================================================
+  // 1. LIMPEZA DO IVCF-20 (Ordem importa por causa das FKs)
+  // ==================================================
+  console.log('🗑️ Limpando dados antigos do IVCF-20...');
+
   const existingIvcf = await prisma.questionnaire.findUnique({
     where: { slug: 'ivcf-20' },
+    select: { id: true },
   });
 
   if (existingIvcf) {
-    console.log(
-      '⚠️ O questionário IVCF-20 já existe no banco. Operação cancelada para evitar duplicidade.',
-    );
-    return;
+    await prisma.answer.deleteMany({
+      where: {
+        questionnaireResponse: { questionnaireId: existingIvcf.id },
+      },
+    });
+
+    await prisma.questionnaireResponse.deleteMany({
+      where: { questionnaireId: existingIvcf.id },
+    });
+
+    await prisma.questionOption.deleteMany({
+      where: {
+        question: {
+          OR: [
+            { group: { questionnaireId: existingIvcf.id } },
+            { subGroup: { group: { questionnaireId: existingIvcf.id } } },
+          ],
+        },
+      },
+    });
+
+    await prisma.question.deleteMany({
+      where: {
+        OR: [
+          { group: { questionnaireId: existingIvcf.id } },
+          { subGroup: { group: { questionnaireId: existingIvcf.id } } },
+        ],
+      },
+    });
+
+    await prisma.questionSubGroup.deleteMany({
+      where: { group: { questionnaireId: existingIvcf.id } },
+    });
+
+    await prisma.questionGroup.deleteMany({
+      where: { questionnaireId: existingIvcf.id },
+    });
+
+    await prisma.questionnaire.deleteMany({ where: { id: existingIvcf.id } });
   }
 
-  // 2. CRIAÇÃO DA ESTRUTURA
-  console.log('📝 Criando estrutura do IVCF-20...');
+  // ==================================================
+  // 2. QUESTIONÁRIO IVCF-20 (Criação da Estrutura)
+  // ==================================================
+  console.log('📝 Criando Questionário IVCF-20 Estrutural...');
 
   await prisma.questionnaire.create({
     data: {
@@ -86,11 +141,7 @@ async function main() {
                   type: QuestionType.MULTIPLE_CHOICE,
                   options: {
                     create: [
-                      {
-                        label: 'Não (ou não faz por outros motivos)',
-                        score: 0,
-                        order: 1,
-                      },
+                      { label: 'Não', score: 0, order: 1 },
                       { label: 'Sim', score: 4, order: 2 },
                     ],
                   },
@@ -102,11 +153,7 @@ async function main() {
                   type: QuestionType.MULTIPLE_CHOICE,
                   options: {
                     create: [
-                      {
-                        label: 'Não (ou não controla por outros motivos)',
-                        score: 0,
-                        order: 1,
-                      },
+                      { label: 'Não', score: 0, order: 1 },
                       { label: 'Sim', score: 4, order: 2 },
                     ],
                   },
@@ -118,11 +165,7 @@ async function main() {
                   type: QuestionType.MULTIPLE_CHOICE,
                   options: {
                     create: [
-                      {
-                        label: 'Não (ou não faz por outros motivos)',
-                        score: 0,
-                        order: 1,
-                      },
+                      { label: 'Não', score: 0, order: 1 },
                       { label: 'Sim', score: 4, order: 2 },
                     ],
                   },
@@ -163,7 +206,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 },
+                      { label: 'Sim', score: 1, order: 2 },
                     ],
                   },
                 },
@@ -175,7 +218,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 },
+                      { label: 'Sim', score: 1, order: 2 },
                     ],
                   },
                 },
@@ -187,7 +230,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 4, order: 2 },
+                      { label: 'Sim', score: 2, order: 2 },
                     ],
                   },
                 },
@@ -208,7 +251,7 @@ async function main() {
                   options: {
                     create: [
                       { label: 'Não', score: 0, order: 1 },
-                      { label: 'Sim', score: 0, order: 2 },
+                      { label: 'Sim', score: 2, order: 2 },
                     ],
                   },
                 },
@@ -266,18 +309,25 @@ async function main() {
                   },
                 },
                 {
-                  title: 'Capacidade aeróbica e força muscular',
+                  title: 'Capacidade aeróbica / Muscular',
                   order: 2,
                   questions: {
                     create: {
                       statement:
-                        'Você tem alguma das quatro condições abaixo? (Perda de peso >4.5kg; IMC < 22; Panturrilha < 31; Marcha > 5s)',
+                        'Você tem alguma das quatro condições abaixo? (Perda de peso, IMC baixo, etc)',
                       order: 14,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
                         create: [
+                          {
+                            label: 'Perda de peso maior que 4,5 kg no último ano',
+                            score: 2,
+                            order: 1,
                           { label: 'Não', score: 0, order: 1 },
-                          { label: 'Sim', score: 2, order: 2 },
+                          { label: 'Sim', score: 1, order: 2 },
+                          { label: 'Não', score: 0, order: 1 },
+                          { label: 'Sim', score: 1, order: 2 },
+                          { label: 'Nenhuma das condições', score: 0, order: 5 },
                         ],
                       },
                     },
@@ -316,7 +366,7 @@ async function main() {
                   },
                 },
                 {
-                  title: 'Continência esfincteriana',
+                  title: 'Continência',
                   order: 4,
                   questions: {
                     create: {
@@ -336,7 +386,7 @@ async function main() {
               ],
             },
           },
-          // --- GRUPO 8: COMUNICAÇÃO (SUBGRUPOS) ---
+          // --- GRUPO 8: COMUNICAÇÃO ---
           {
             title: 'Comunicação',
             order: 8,
@@ -348,7 +398,7 @@ async function main() {
                   questions: {
                     create: {
                       statement:
-                        'Você tem problemas de visão capazes de impedir a realização de alguma atividade do cotidiano?',
+                        'Você tem problemas de visão capazes de impedir a realização de alguma atividade do cotidiano? É permitido o uso de óculos ou lentes de contato.',
                       order: 18,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -366,7 +416,7 @@ async function main() {
                   questions: {
                     create: {
                       statement:
-                        'Você tem problemas de audição capazes de impedir a realização de alguma atividade do cotidiano?',
+                        'Você tem problemas de audição capazes de impedir a realização de alguma atividade do cotidiano? É permitido o uso de aparelhos de audição.',
                       order: 19,
                       type: QuestionType.MULTIPLE_CHOICE,
                       options: {
@@ -384,19 +434,31 @@ async function main() {
           // --- GRUPO 9: COMORBIDADES ---
           {
             title: 'Comorbidades Múltiplas',
-            description:
-              'Polipatologia, Polifarmácia e Internação Recente (Teto 4 pts)',
             order: 9,
             questions: {
               create: {
                 statement:
-                  'Você tem alguma das três condições abaixo? (5+ doenças; 5+ medicamentos; Internação < 6 meses)',
+                  'Você tem alguma das três condições? (Polipatologia, Polifarmácia, Internação recente)',
                 order: 20,
                 type: QuestionType.MULTIPLE_CHOICE,
                 options: {
                   create: [
-                    { label: 'Não', score: 0, order: 1 },
-                    { label: 'Sim', score: 4, order: 2 },
+                    {
+                      label: 'Cinco ou mais doenças crônicas (polipatologia)',
+                      score: 4,
+                      order: 1,
+                    },
+                    {
+                      label: 'Uso de cinco ou mais medicamentos (polifarmácia)',
+                      score: 4,
+                      order: 2,
+                    },
+                    {
+                      label: 'Internação hospitalar nos últimos 6 meses',
+                      score: 4,
+                      order: 3,
+                    },
+                    { label: 'Nenhuma das condições', score: 0, order: 4 },
                   ],
                 },
               },
@@ -407,7 +469,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Questionário IVCF-20 populado com sucesso em PROD!');
+  console.log('✅ Seed concluído com sucesso!');
 }
 
 main()
