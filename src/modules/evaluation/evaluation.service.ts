@@ -312,10 +312,15 @@ export class EvaluationService extends BaseService<
       age: number;
       sex: string;
     },
+    options: { reprocess?: boolean } = {},
   ) {
+    const { reprocess = false } = options;
+
+    // On reprocessing we read every sensor row for the evaluation, since a
+    // previously-processed test has its raw rows flagged `filtered: true`.
     const [rawData, evaluation] = await Promise.all([
       this.prisma.sensorData.findMany({
-        where: { evaluationId, filtered: false },
+        where: reprocess ? { evaluationId } : { evaluationId, filtered: false },
         orderBy: { timestamp: 'asc' },
       }),
       this.prisma.evaluation.findUniqueOrThrow({
@@ -423,20 +428,15 @@ export class EvaluationService extends BaseService<
     this.logger.log(`Manual processing requested for evaluation ${id}.`);
 
     try {
-      const evaluation = await this.prisma.evaluation.findFirst({
-        where: {
-          id,
-          sensorData: { some: { filtered: false } },
-        },
+      const evaluation = await this.prisma.evaluation.findUnique({
+        where: { id },
         include: {
           participant: { include: { user: true } },
         },
       });
 
       if (!evaluation) {
-        throw new NotFoundException(
-          'Evaluation not found or has no pending sensor data to process.',
-        );
+        throw new NotFoundException('Avaliação não encontrada.');
       }
 
       const age = this.calculateAge(
@@ -451,7 +451,9 @@ export class EvaluationService extends BaseService<
         age,
       };
 
-      await this.processEvaluationData(evaluation.id, userProfile);
+      await this.processEvaluationData(evaluation.id, userProfile, {
+        reprocess: true,
+      });
 
       this.logger.log(`Manual processing finished for evaluation ${id}.`);
 
