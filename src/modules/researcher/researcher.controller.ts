@@ -14,8 +14,12 @@ import { UpdateResearcherDto } from './dto/update-researcher.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { SystemRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { FindResearchersQueryDto } from './dto/find-researchers-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
+import { GetKPIQueryParams } from './dto/researcher-kpi.dto';
 
 @Controller('researcher')
 @ApiBearerAuth()
@@ -31,8 +35,26 @@ export class ResearcherController {
 
   @Get()
   @Roles([SystemRole.RESEARCHER])
-  findAll(@Query() queryDto: QueryDto) {
+  findAll(@Query() queryDto: FindResearchersQueryDto) {
     return this.researcherService.findAll(queryDto);
+  }
+
+  @Get('/population')
+  @Roles([SystemRole.RESEARCHER])
+  async population(
+    @Query() query: GetKPIQueryParams,
+    @RequestUser() user: Payload,
+  ) {
+    return this.researcherService.getResearcherPopulationData(user.id, query);
+  }
+
+  @Get('/evaluations')
+  @Roles([SystemRole.RESEARCHER])
+  async evaluations(
+    @Query() query: GetKPIQueryParams,
+    @RequestUser() user: Payload,
+  ) {
+    return this.researcherService.getResearcherEvaluationsData(user.id, query);
   }
 
   @Get(':id')
@@ -54,7 +76,17 @@ export class ResearcherController {
   @Delete(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  remove(@Param('id') id: string) {
-    return this.researcherService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeactivateDto,
+    @RequestUser() user: Payload,
+  ) {
+    return this.researcherService.remove(id, user.id, dto.reason);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles([SystemRole.MANAGER])
+  reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
+    return this.researcherService.reactivate(id, user.id);
   }
 }

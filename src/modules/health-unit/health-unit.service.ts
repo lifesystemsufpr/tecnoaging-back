@@ -4,7 +4,10 @@ import { UpdateHealthUnitDto } from './dto/update-health-unit.dto';
 import { PrismaService } from 'src/shared/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { normalizeString } from 'src/shared/functions/normalize-string';
-import { FindHealthcareUnitsQueryDto } from './dto/find-health-unit-query.dto';
+import {
+  FindHealthcareUnitsQueryDto,
+  HealthcareUnitSortField,
+} from './dto/find-health-unit-query.dto';
 
 @Injectable()
 export class HealthUnitService {
@@ -27,44 +30,49 @@ export class HealthUnitService {
     const {
       page = 1,
       pageSize = 10,
-      search,
+      name,
       city,
       state,
       neighborhood,
+      zipCode,
       active,
       startDate,
       endDate,
-      orderBy,
-      sortOrder,
+      sortField,
+      sortDirection = 'asc',
     } = query;
 
     const where: Prisma.HealthcareUnitWhereInput = {
       AND: [
+        name
+          ? {
+              name_normalized: {
+                contains: normalizeString(name),
+                mode: 'insensitive',
+              },
+            }
+          : {},
         city ? { city: { contains: city, mode: 'insensitive' } } : {},
         state ? { state: { contains: state, mode: 'insensitive' } } : {},
         neighborhood
           ? { neighborhood: { contains: neighborhood, mode: 'insensitive' } }
           : {},
+        zipCode ? { zipCode: { contains: zipCode, mode: 'insensitive' } } : {},
         active !== undefined ? { active } : { active: true },
         startDate || endDate
           ? { createdAt: { gte: startDate, lte: endDate } }
           : {},
       ],
-      OR: search
-        ? [
-            { name: { contains: search, mode: 'insensitive' } },
-            { name_normalized: { contains: search, mode: 'insensitive' } },
-            { zipCode: { contains: search } },
-          ]
-        : undefined,
     };
+
+    const orderBy = buildHealthUnitOrderBy(sortField, sortDirection);
 
     const [units, total] = await Promise.all([
       this.prisma.healthcareUnit.findMany({
         where,
         take: Number(pageSize),
         skip: (Number(page) - 1) * Number(pageSize),
-        orderBy: { [orderBy || 'name']: sortOrder || 'asc' },
+        orderBy,
       }),
       this.prisma.healthcareUnit.count({ where }),
     ]);
@@ -131,13 +139,20 @@ export class HealthUnitService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, performedById: string, reason?: string) {
     const relationInfo = await this.checkDeletability(id);
 
     try {
       const deactivatedUnit = await this.prisma.healthcareUnit.update({
         where: { id },
-        data: { active: false },
+        data: {
+          active: false,
+          deactivatedAt: new Date(),
+          deactivatedBy: performedById,
+          deactivationReason: reason ?? null,
+          reactivatedAt: null,
+          reactivatedBy: null,
+        },
       });
 
       return {
@@ -157,7 +172,7 @@ export class HealthUnitService {
     }
   }
 
-  async restore(id: string) {
+  async restore(id: string, performedById: string) {
     const healthUnit = await this.prisma.healthcareUnit.findFirst({
       where: { id, active: false },
     });
@@ -170,11 +185,27 @@ export class HealthUnitService {
 
     return await this.prisma.healthcareUnit.update({
       where: { id },
-      data: { active: true },
+      data: {
+        active: true,
+        reactivatedAt: new Date(),
+        reactivatedBy: performedById,
+      },
     });
   }
 
   async checkDeletability(id: string) {
     return await this.prisma.checkDeletionSafety('healthcareUnit', id);
   }
+}
+
+const HEALTH_UNIT_SORTABLE_FIELDS = new Set<string>(
+  Object.values(HealthcareUnitSortField),
+);
+
+function buildHealthUnitOrderBy(
+  sortField?: string,
+  direction: 'asc' | 'desc' = 'asc',
+) {
+  if (!sortField || !HEALTH_UNIT_SORTABLE_FIELDS.has(sortField)) return undefined;
+  return { [sortField]: direction };
 }

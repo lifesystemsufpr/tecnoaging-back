@@ -12,11 +12,17 @@ import { CreateEvaluationDto } from './dto/create-evaluation.dto';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
+  ApiExtraModels,
   ApiNoContentResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  getSchemaPath,
 } from '@nestjs/swagger';
+import {
+  StepDetailedResponse,
+  StsDetailedResponse,
+} from './dto/evaluation-detail-response.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
@@ -91,6 +97,18 @@ export class EvaluationController {
     return this.evaluationService.findOne(id);
   }
 
+  @Get(':id/result')
+  @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER, SystemRole.PARTICIPANT])
+  @ApiOkResponse({
+    description: 'Returns the classification and repetition count of the processed evaluation.',
+  })
+  @ApiNotFoundResponse({
+    description: 'Evaluation not found or has not been processed yet.',
+  })
+  findResult(@Param('id') id: string) {
+    return this.evaluationService.getResult(id);
+  }
+
   @Get(':id/repetitions/history')
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
   async findRepetitions(@Param('id') id: string) {
@@ -99,6 +117,19 @@ export class EvaluationController {
 
   @Get(':id/detailed')
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
+  @ApiExtraModels(StsDetailedResponse, StepDetailedResponse)
+  @ApiOkResponse({
+    description:
+      'Resposta detalhada por tipo de teste, discriminada pelo campo "kind" ' +
+      '(STS para FTSTS/TTSTS, STEP para TMSTS).',
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(StsDetailedResponse) },
+        { $ref: getSchemaPath(StepDetailedResponse) },
+      ],
+      discriminator: { propertyName: 'kind' },
+    },
+  })
   async findOneDetailed(@Param('id') id: string) {
     return this.evaluationService.findOneDetailed(id);
   }
@@ -107,8 +138,7 @@ export class EvaluationController {
   @Roles([SystemRole.MANAGER, SystemRole.RESEARCHER])
   @ApiOkResponse()
   @ApiNotFoundResponse({
-    description:
-      'Evaluation not found or has no pending sensor data to process.',
+    description: 'Evaluation not found or has no sensor data to process.',
   })
   @ApiConflictResponse({
     description: 'Evaluation is already being processed.',

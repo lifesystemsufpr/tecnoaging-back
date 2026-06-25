@@ -15,6 +15,7 @@ import { InstitutionModule } from './modules/institution/institution.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import provideGlobalAppGuards from './modules/auth/providers/global-guards.provider';
 import { ParticipantModule } from './modules/participant/participant.module';
+import { PreRegistrationModule } from './modules/pre-registration/pre-registration.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { QuestionnairesModule } from './modules/questionnaire/questionnaire.module';
 import { APP_FILTER } from '@nestjs/core';
@@ -37,6 +38,7 @@ import { AllExceptionsFilter } from './shared/filters/all-exceptions.filter';
     ResearcherModule,
     HealthProfessionalModule,
     ParticipantModule,
+    PreRegistrationModule,
     EvaluationModule,
     HealthUnitModule,
     InstitutionModule,

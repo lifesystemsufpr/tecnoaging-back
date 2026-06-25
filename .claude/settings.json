@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/dev/Work/facul/ivcf/**)",
+      "Read(//home/dev/Work/facul/**)",
+      "Bash(npx tsc *)",
+      "Read(//home/dev/Work/facul/tecnoaging-front/src/features/professionals/**)",
+      "Bash(awk -F/ '{ *)",
+      "Bash(npx prisma *)",
+      "Bash(npx eslint *)",
+      "Skill(code-review)",
+      "Skill(code-review:*)"
+    ]
+  }
+}

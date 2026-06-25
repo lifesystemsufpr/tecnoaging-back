@@ -16,6 +16,9 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '@prisma/client';
 import { FindHealthcareUnitsQueryDto } from './dto/find-health-unit-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
 
 @Controller('health-unit')
 @ApiBearerAuth()
@@ -52,7 +55,17 @@ export class HealthUnitController {
   @Delete(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  remove(@Param('id') id: string) {
-    return this.healthUnitService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeactivateDto,
+    @RequestUser() user: Payload,
+  ) {
+    return this.healthUnitService.remove(id, user.id, dto.reason);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles([SystemRole.MANAGER])
+  reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
+    return this.healthUnitService.restore(id, user.id);
   }
 }

@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -19,7 +20,10 @@ import {
   PrismaClient,
 } from '@prisma/client';
 import { BaseService } from 'src/shared/services/base.service';
-import { FilterEvaluationDto } from './dto/filter-evaluation.dto';
+import {
+  FilterEvaluationDto,
+  EvaluationSortField,
+} from './dto/filter-evaluation.dto';
 import { normalizeString as normalize } from 'src/shared/functions/normalize-string';
 import { HttpService } from '@nestjs/axios';
 import { isAxiosError } from 'axios';
@@ -67,15 +71,21 @@ export type EvaluationResponse = Omit<
 
 interface PythonCycleDetail {
   Ciclo: number;
-  'Tempo total Celular': number;
-  'Tempo levantar Celular': number;
-  'Tempo sentar Celular': number;
-  'Frequência Celular': number;
+  'Tempo total (s)': number;
+  'Tempo levantar (s)': number;
+  'Tempo sentar (s)': number;
+  'Frequência (Hz)': number;
+  'Transição em pé (s)': number;
+  'Transição sentado (s)': number;
+  'Vel. flexão levantar (°/s)': number;
+  'Vel. extensão levantar (°/s)': number;
+  'Vel. flexão sentar (°/s)': number;
+  'Vel. extensão sentar (°/s)': number;
+  'Tempo Pico 1 (s)': number;
+  'Tempo Pico 2 (s)': number;
+  'Valor Pico 1 (°)': number;
+  'Valor Pico 2 (°)': number;
   'Potência média ciclo (J/s)': number;
-  'Vel. extensão levantar Celular': number;
-  'Vel. flexão sentar Celular': number;
-  'Valor Pico 1 Celular': number;
-  'Valor Pico 2 Celular': number;
 }
 
 export interface ProcessedPoint {
@@ -129,6 +139,19 @@ interface PythonMarchaResponse {
   };
   detalhes_picos: PythonMarchaStepDetail[];
   timeseries_processada: ProcessedPoint[];
+}
+
+// Formatos persistidos em EvaluationIndicators.processedCurve (JSON).
+interface StoredStsCurve {
+  timeseries: ProcessedPoint[];
+  metricas: PythonResponse['metricas_globais'];
+  ciclos: PythonCycleDetail[];
+}
+
+interface StoredStepCurve {
+  timeseries: ProcessedPoint[];
+  metricas: PythonMarchaResponse['metricas_globais'];
+  picos: PythonMarchaStepDetail[];
 }
 
 type EvaluationQueryResult = Omit<
@@ -229,6 +252,21 @@ export class EvaluationService extends BaseService<
   async create(createEvaluationDto: CreateEvaluationDto) {
     const { sensorData, ...evaluationData } = createEvaluationDto;
 
+    const participant = await this.prisma.participant.findUnique({
+      where: { id: evaluationData.participantId },
+      select: { active: true },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participante não encontrado.');
+    }
+
+    if (!participant.active) {
+      throw new ForbiddenException(
+        'Participante inativo não pode receber novas avaliações.',
+      );
+    }
+
     const evaluation = await this.prisma.evaluation.create({
       data: {
         ...evaluationData,
@@ -274,10 +312,15 @@ export class EvaluationService extends BaseService<
       age: number;
       sex: string;
     },
+    options: { reprocess?: boolean } = {},
   ) {
+    const { reprocess = false } = options;
+
+    // On reprocessing we read every sensor row for the evaluation, since a
+    // previously-processed test has its raw rows flagged `filtered: true`.
     const [rawData, evaluation] = await Promise.all([
       this.prisma.sensorData.findMany({
-        where: { evaluationId, filtered: false },
+        where: reprocess ? { evaluationId } : { evaluationId, filtered: false },
         orderBy: { timestamp: 'asc' },
       }),
       this.prisma.evaluation.findUniqueOrThrow({
@@ -385,20 +428,15 @@ export class EvaluationService extends BaseService<
     this.logger.log(`Manual processing requested for evaluation ${id}.`);
 
     try {
-      const evaluation = await this.prisma.evaluation.findFirst({
-        where: {
-          id,
-          sensorData: { some: { filtered: false } },
-        },
+      const evaluation = await this.prisma.evaluation.findUnique({
+        where: { id },
         include: {
           participant: { include: { user: true } },
         },
       });
 
       if (!evaluation) {
-        throw new NotFoundException(
-          'Evaluation not found or has no pending sensor data to process.',
-        );
+        throw new NotFoundException('Avaliação não encontrada.');
       }
 
       const age = this.calculateAge(
@@ -413,7 +451,9 @@ export class EvaluationService extends BaseService<
         age,
       };
 
-      await this.processEvaluationData(evaluation.id, userProfile);
+      await this.processEvaluationData(evaluation.id, userProfile, {
+        reprocess: true,
+      });
 
       this.logger.log(`Manual processing finished for evaluation ${id}.`);
 
@@ -459,8 +499,11 @@ export class EvaluationService extends BaseService<
     await this.prisma.$transaction(async (txArgument) => {
       const tx = txArgument as PrismaClient;
 
-      const processedCurveJson =
-        result.timeseries_processada as unknown as Prisma.InputJsonValue;
+      const processedCurveJson = {
+        timeseries: result.timeseries_processada,
+        metricas: result.metricas_globais,
+        ciclos: result.detalhes_ciclos,
+      } as unknown as Prisma.InputJsonValue;
 
       await tx.evaluationIndicators.upsert({
         where: { evaluationId },
@@ -488,15 +531,15 @@ export class EvaluationService extends BaseService<
           data: result.detalhes_ciclos.map((c) => ({
             evaluationId,
             cycleNumber: c.Ciclo,
-            totalTime: c['Tempo total Celular'],
-            standUpTime: c['Tempo levantar Celular'],
-            sitDownTime: c['Tempo sentar Celular'],
-            frequency: c['Frequência Celular'],
+            totalTime: c['Tempo total (s)'],
+            standUpTime: c['Tempo levantar (s)'],
+            sitDownTime: c['Tempo sentar (s)'],
+            frequency: c['Frequência (Hz)'],
             meanPower: c['Potência média ciclo (J/s)'],
-            extensionVel: c['Vel. extensão levantar Celular'],
-            flexionVel: c['Vel. flexão sentar Celular'],
-            peak1Val: c['Valor Pico 1 Celular'],
-            peak2Val: c['Valor Pico 2 Celular'],
+            extensionVel: c['Vel. extensão levantar (°/s)'],
+            flexionVel: c['Vel. flexão sentar (°/s)'],
+            peak1Val: c['Valor Pico 1 (°)'],
+            peak2Val: c['Valor Pico 2 (°)'],
           })),
         });
       }
@@ -587,6 +630,33 @@ export class EvaluationService extends BaseService<
     });
 
     return g;
+  }
+
+  async getResult(id: string) {
+    const evaluation = await this.prisma.evaluation.findUnique({
+      where: { id },
+      include: {
+        indicators: {
+          select: {
+            classification: true,
+            repetitionCount: true,
+          },
+        },
+      },
+    });
+
+    if (!evaluation) {
+      throw new NotFoundException('Evaluation not found');
+    }
+
+    if (!evaluation.indicators) {
+      throw new NotFoundException('Evaluation has not been processed yet');
+    }
+
+    return {
+      classification: evaluation.indicators.classification,
+      repetitionCount: evaluation.indicators.repetitionCount,
+    };
   }
 
   async findOne(id: string): Promise<EvaluationResponse> {
@@ -689,58 +759,224 @@ export class EvaluationService extends BaseService<
       evaluation.date,
     );
 
-    const processedData =
-      (evaluation.indicators?.processedCurve as unknown as ProcessedPoint[]) ||
-      [];
+    const curve = evaluation.indicators?.processedCurve as unknown;
 
-    const derivedBlock = {
-      participantAgeOnEvaluation: participantAge,
-      indicators: evaluation.indicators
-        ? [
-            {
-              name: 'Repetitions',
-              value: evaluation.indicators.repetitionCount,
-              maxValue: 30,
-              classification: evaluation.indicators.classification,
-            },
-            {
-              name: 'Power',
-              value: evaluation.indicators.meanPower,
-              maxValue: 500,
-              classification: '',
-              unit: 'W',
-            },
-            {
-              name: 'Total Energy',
-              value: evaluation.indicators.totalEnergy,
-              maxValue: 10000,
-              classification: '',
-              unit: 'J',
-            },
-          ]
-        : [],
-      overallClassification: evaluation.indicators?.classification || 'N/A',
-    };
+    if (evaluation.type === 'TMSTS') {
+      return this.buildStepDetailed(
+        evaluation,
+        sensorBlock,
+        participantAge,
+        curve,
+      );
+    }
 
-    const cyclesList: EvaluationCycle[] = evaluation.cycles || [];
+    return this.buildStsDetailed(
+      evaluation,
+      sensorBlock,
+      participantAge,
+      curve,
+    );
+  }
+
+  // Detecta o payload completo (novo formato { timeseries, metricas, ciclos }).
+  private isStoredStsCurve(curve: unknown): curve is StoredStsCurve {
+    return (
+      !!curve &&
+      typeof curve === 'object' &&
+      !Array.isArray(curve) &&
+      'ciclos' in curve
+    );
+  }
+
+  private buildStsDetailed(
+    evaluation: DetailedEvaluation,
+    sensorBlock: object,
+    participantAge: number,
+    curve: unknown,
+  ) {
+    const indicators = evaluation.indicators;
+    const isFullPayload = this.isStoredStsCurve(curve);
+
+    let timeseries: ProcessedPoint[] = [];
+    if (isFullPayload) {
+      timeseries = curve.timeseries;
+    } else if (Array.isArray(curve)) {
+      timeseries = curve as ProcessedPoint[];
+    }
+
+    const indicatorCards = indicators
+      ? [
+          {
+            name: 'Repetitions',
+            value: indicators.repetitionCount,
+            maxValue: 30,
+            classification: indicators.classification,
+          },
+          {
+            name: 'Power',
+            value: indicators.meanPower,
+            maxValue: 500,
+            classification: '',
+            unit: 'W',
+          },
+          {
+            name: 'Total Energy',
+            value: indicators.totalEnergy,
+            maxValue: 10000,
+            classification: '',
+            unit: 'J',
+          },
+        ]
+      : [];
+
+    // tempo_total_acumulado só existe no payload completo.
+    if (isFullPayload) {
+      indicatorCards.push({
+        name: 'Total Time',
+        value: curve.metricas.tempo_total_acumulado,
+        maxValue: 0,
+        classification: '',
+        unit: 's',
+      });
+    }
+
+    // Ciclos completos vêm do payload; legados caem para a tabela (lossy).
+    const cycles = isFullPayload
+      ? curve.ciclos.map((c) => ({
+          cycle: c.Ciclo,
+          totalTime: c['Tempo total (s)'],
+          standUpTime: c['Tempo levantar (s)'],
+          sitDownTime: c['Tempo sentar (s)'],
+          frequency: c['Frequência (Hz)'],
+          transitionStandUp: c['Transição em pé (s)'],
+          transitionSitDown: c['Transição sentado (s)'],
+          velocityFlexionStandUp: c['Vel. flexão levantar (°/s)'],
+          velocityExtension: c['Vel. extensão levantar (°/s)'],
+          velocityFlexion: c['Vel. flexão sentar (°/s)'],
+          velocityExtensionSitDown: c['Vel. extensão sentar (°/s)'],
+          peak1Time: c['Tempo Pico 1 (s)'],
+          peak2Time: c['Tempo Pico 2 (s)'],
+          peak1Value: c['Valor Pico 1 (°)'],
+          peak2Value: c['Valor Pico 2 (°)'],
+          power: c['Potência média ciclo (J/s)'],
+        }))
+      : (evaluation.cycles || []).map((c) => ({
+          cycle: c.cycleNumber,
+          totalTime: c.totalTime,
+          standUpTime: c.standUpTime,
+          sitDownTime: c.sitDownTime,
+          frequency: c.frequency,
+          transitionStandUp: null,
+          transitionSitDown: null,
+          velocityFlexionStandUp: null,
+          velocityExtension: c.extensionVel,
+          velocityFlexion: c.flexionVel,
+          velocityExtensionSitDown: null,
+          peak1Time: null,
+          peak2Time: null,
+          peak1Value: c.peak1Val,
+          peak2Value: c.peak2Val,
+          power: c.meanPower,
+        }));
 
     return {
+      kind: 'STS' as const,
       sensor: sensorBlock,
       processed: {
-        data: processedData,
+        data: timeseries,
         label: 'Ângulo do Tronco',
         unit: '°',
       },
-      derived: derivedBlock,
-      cycles: cyclesList.map((c) => ({
-        cycle: c.cycleNumber,
-        totalTime: c.totalTime,
-        standUpTime: c.standUpTime,
-        sitDownTime: c.sitDownTime,
-        power: c.meanPower,
-        velocityExtension: c.extensionVel,
-        velocityFlexion: c.flexionVel,
-      })),
+      derived: {
+        participantAgeOnEvaluation: participantAge,
+        indicators: indicatorCards,
+        overallClassification: indicators?.classification || 'N/A',
+      },
+      cycles,
+    };
+  }
+
+  private buildStepDetailed(
+    evaluation: DetailedEvaluation,
+    sensorBlock: object,
+    participantAge: number,
+    curve: unknown,
+  ) {
+    const indicators = evaluation.indicators;
+    const isFullPayload =
+      !!curve &&
+      typeof curve === 'object' &&
+      !Array.isArray(curve) &&
+      'picos' in curve;
+
+    const stored = isFullPayload ? (curve as StoredStepCurve) : null;
+    const m = stored?.metricas;
+
+    const metrics = m
+      ? {
+          nSteps: m.n_passos,
+          strategy: m.estrategia,
+          cadence: m.cadencia_ciclos_min,
+          velInitial: m.vel_ini_deg_s,
+          velFinal: m.vel_fim_deg_s,
+          deltaVel: m.delta_vel_deg_s,
+          slope: m.slope_deg_s2,
+          velMean: m.vel_media_deg_s,
+          velStd: m.vel_dp_deg_s,
+          cvVel: m.cv_vel,
+          velMax: m.vel_max_deg_s,
+          velMin: m.vel_min_deg_s,
+          timeMean: m.tempo_medio_s,
+          timeStd: m.tempo_dp_s,
+          cvTime: m.cv_tempo,
+          timeMax: m.tempo_max_s,
+          timeMin: m.tempo_min_s,
+        }
+      : {
+          // Fallback para registros sem payload completo (campos escalares).
+          nSteps: indicators?.repetitionCount ?? 0,
+          strategy: indicators?.classification ?? '',
+          cadence: indicators?.totalEnergy ?? 0,
+          velInitial: null,
+          velFinal: null,
+          deltaVel: null,
+          slope: null,
+          velMean: indicators?.meanPower ?? 0,
+          velStd: 0,
+          cvVel: 0,
+          velMax: 0,
+          velMin: 0,
+          timeMean: null,
+          timeStd: null,
+          cvTime: null,
+          timeMax: null,
+          timeMin: null,
+        };
+
+    const peaks = (stored?.picos ?? []).map((p) => ({
+      peak: p.pico,
+      time: p.t_pico_s,
+      rawVel: p.vel_bruta_deg_s,
+      phoneXVel: p.vel_phoneX_deg_s,
+      phoneYVel: p.vel_phoneY_deg_s,
+      phoneZVel: p.vel_phoneZ_deg_s,
+      calibratedVel: p.vel_calibrada_deg_s,
+    }));
+
+    return {
+      kind: 'STEP' as const,
+      sensor: sensorBlock,
+      processed: {
+        data: stored?.timeseries ?? [],
+        label: 'Velocidade Angular',
+        unit: '°/s',
+      },
+      derived: {
+        participantAgeOnEvaluation: participantAge,
+        metrics,
+        overallClassification: metrics.strategy || 'N/A',
+      },
+      peaks,
     };
   }
 
@@ -762,14 +998,18 @@ export class EvaluationService extends BaseService<
     const {
       page = 1,
       pageSize = 10,
-      search,
+      participantId,
       participantCpf,
       participantName,
       healthProfessionalCpf,
       healthProfessionalName,
+      healthcareUnitId,
+      healthcareUnitName,
       type,
       startDate,
       endDate,
+      sortField,
+      sortDirection = 'desc',
     } = filters;
 
     const skip = (page - 1) * pageSize;
@@ -777,26 +1017,26 @@ export class EvaluationService extends BaseService<
 
     const conditions: Prisma.EvaluationWhereInput[] = [];
 
+    if (participantId) conditions.push({ participantId });
+    if (healthcareUnitId) conditions.push({ healthcareUnitId });
+    if (healthcareUnitName) {
+      conditions.push({
+        healthcareUnit: {
+          name_normalized: { contains: normalize(healthcareUnitName), mode: 'insensitive' },
+        },
+      });
+    }
+
     if (participantCpf) {
       conditions.push({
-        participant: {
-          user: {
-            cpf: {
-              contains: participantCpf,
-              mode: 'insensitive',
-            },
-          },
-        },
+        participant: { user: { cpf: { contains: participantCpf, mode: 'insensitive' } } },
       });
     }
     if (participantName) {
       conditions.push({
         participant: {
           user: {
-            fullName: {
-              contains: participantName,
-              mode: 'insensitive',
-            },
+            fullName_normalized: { contains: normalize(participantName), mode: 'insensitive' },
           },
         },
       });
@@ -805,8 +1045,8 @@ export class EvaluationService extends BaseService<
       conditions.push({
         healthProfessional: {
           user: {
-            fullName: {
-              contains: healthProfessionalName,
+            fullName_normalized: {
+              contains: normalize(healthProfessionalName),
               mode: 'insensitive',
             },
           },
@@ -815,14 +1055,7 @@ export class EvaluationService extends BaseService<
     }
     if (healthProfessionalCpf) {
       conditions.push({
-        healthProfessional: {
-          user: {
-            cpf: {
-              contains: healthProfessionalCpf,
-              mode: 'insensitive',
-            },
-          },
-        },
+        healthProfessional: { user: { cpf: { contains: healthProfessionalCpf, mode: 'insensitive' } } },
       });
     }
     if (type) conditions.push({ type });
@@ -837,29 +1070,8 @@ export class EvaluationService extends BaseService<
       conditions.push({ date: dateFilter });
     }
 
-    if (search) {
-      const termNormalized = normalize(search);
-
-      conditions.push({
-        OR: this.searchableFields.map((field) => {
-          const parts = field.split('.');
-          const isNormalizedField = field.endsWith('_normalized');
-
-          return parts
-            .slice()
-            .reverse()
-            .reduce(
-              (obj: Record<string, any>, part: string) => ({ [part]: obj }),
-              {
-                contains: isNormalizedField ? termNormalized : search,
-                ...(isNormalizedField ? {} : { mode: 'insensitive' }),
-              },
-            ) as Prisma.EvaluationWhereInput;
-        }),
-      });
-    }
-
     const where: Prisma.EvaluationWhereInput = { AND: conditions };
+    const orderBy = buildEvaluationOrderBy(sortField, sortDirection);
 
     const selectFields = {
       id: true,
@@ -911,7 +1123,7 @@ export class EvaluationService extends BaseService<
         select: selectFields,
         skip,
         take,
-        orderBy: { time_end: 'desc' },
+        orderBy,
       }),
       this.prisma.evaluation.count({ where }),
     ]);
@@ -996,8 +1208,10 @@ export class EvaluationService extends BaseService<
           gte: startUtc,
           lt: endUtc,
         },
+        participant: { active: true },
       },
       select: {
+        participantId: true,
         participant: {
           select: {
             user: {
@@ -1010,11 +1224,22 @@ export class EvaluationService extends BaseService<
       },
     });
 
+    // Conta pacientes únicos: um participante com várias avaliações no mês
+    // deve aparecer apenas uma vez no total e na distribuição por sexo.
+    const seenParticipants = new Map<string, string | null>();
+    for (const evaluation of evaluations) {
+      if (!seenParticipants.has(evaluation.participantId)) {
+        seenParticipants.set(
+          evaluation.participantId,
+          evaluation.participant.user.gender,
+        );
+      }
+    }
+
     let male = 0;
     let female = 0;
 
-    for (const evaluation of evaluations) {
-      const gender = evaluation.participant.user.gender;
+    for (const gender of seenParticipants.values()) {
       if (gender === 'MALE') male++;
       if (gender === 'FEMALE') female++;
     }
@@ -1023,7 +1248,7 @@ export class EvaluationService extends BaseService<
       timezone: DASHBOARD_TIMEZONE,
       month,
       year,
-      total: evaluations.length,
+      total: seenParticipants.size,
       male,
       female,
     };
@@ -1035,7 +1260,7 @@ export class EvaluationService extends BaseService<
     await this.ensureHealthProfessionalExists(healthProfessionalId);
 
     const unitRows = await this.prisma.evaluation.findMany({
-      where: { healthProfessionalId },
+      where: { healthProfessionalId, participant: { active: true } },
       select: { healthcareUnitId: true },
       distinct: ['healthcareUnitId'],
     });
@@ -1055,13 +1280,14 @@ export class EvaluationService extends BaseService<
         by: ['healthProfessionalId'],
         where: {
           healthcareUnitId: { in: unitIds },
+          participant: { active: true },
         },
         _count: {
           _all: true,
         },
       }),
       this.prisma.evaluation.count({
-        where: { healthProfessionalId },
+        where: { healthProfessionalId, participant: { active: true } },
       }),
     ]);
 
@@ -1073,7 +1299,7 @@ export class EvaluationService extends BaseService<
     const difference = Number(((individual ?? 0) - teamAverage).toFixed(2));
 
     return {
-      individual,
+      individual: individual ?? 0,
       teamAverage,
       difference,
       hasIndividualData,
@@ -1107,6 +1333,7 @@ export class EvaluationService extends BaseService<
           gte: startUtc,
           lt: endUtc,
         },
+        participant: { active: true },
       },
       select: {
         date: true,
@@ -1181,16 +1408,18 @@ export class EvaluationService extends BaseService<
         where: {
           healthProfessionalId,
           date: { gte: curStart, lt: curEnd },
+          participant: { active: true },
         },
       }),
       this.prisma.evaluation.count({
         where: {
           healthProfessionalId,
           date: { gte: prevStart, lt: prevEnd },
+          participant: { active: true },
         },
       }),
       this.prisma.evaluation.findMany({
-        where: { healthProfessionalId },
+        where: { healthProfessionalId, participant: { active: true } },
         select: {
           participant: {
             select: { user: { select: { gender: true } } },
@@ -1198,7 +1427,7 @@ export class EvaluationService extends BaseService<
         },
       }),
       this.prisma.evaluation.findMany({
-        where: { healthProfessionalId },
+        where: { healthProfessionalId, participant: { active: true } },
         select: { healthcareUnitId: true },
         distinct: ['healthcareUnitId'],
       }),
@@ -1213,6 +1442,7 @@ export class EvaluationService extends BaseService<
             where: {
               healthcareUnitId: { in: unitIds },
               date: { gte: curStart, lt: curEnd },
+              participant: { active: true },
             },
             _count: { _all: true },
           })
@@ -1223,6 +1453,7 @@ export class EvaluationService extends BaseService<
             where: {
               healthcareUnitId: { in: unitIds },
               date: { gte: prevStart, lt: prevEnd },
+              participant: { active: true },
             },
             _count: { _all: true },
           })
@@ -1301,7 +1532,9 @@ export class EvaluationService extends BaseService<
     };
   }
 
-  private async ensureHealthProfessionalExists(healthProfessionalId: string) {
+  private async ensureHealthProfessionalExists(
+    healthProfessionalId: string,
+  ) {
     const healthProfessional = await this.prisma.healthProfessional.findUnique({
       where: { id: healthProfessionalId },
       select: { id: true },
@@ -1342,4 +1575,18 @@ export class EvaluationService extends BaseService<
     }));
     return { data: formattedData };
   }
+}
+
+const EVALUATION_SORTABLE_FIELDS = new Set<string>(
+  Object.values(EvaluationSortField),
+);
+
+function buildEvaluationOrderBy(
+  sortField?: string,
+  direction: 'asc' | 'desc' = 'desc',
+) {
+  if (!sortField || !EVALUATION_SORTABLE_FIELDS.has(sortField)) {
+    return { time_end: direction };
+  }
+  return { [sortField]: direction };
 }

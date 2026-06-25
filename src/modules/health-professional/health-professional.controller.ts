@@ -13,9 +13,13 @@ import { CreateHealthProfessionalDto } from './dto/create-health-professional.dt
 import { LinkParticipantDto, UpdateHealthProfessionalDto } from './dto/update-health-professional.dto';
 import { ApiBearerAuth, ApiNoContentResponse } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { SystemRole } from '@prisma/client';
-import { QueryDto } from 'src/shared/dto/query.dto';
+import { FindHealthProfessionalsQueryDto } from './dto/find-health-professionals-query.dto';
 import { ApiStandardErrors } from 'src/shared/decorators/api-standard-errors.decorator';
+import { RequestUser } from '../auth/decorators/request-user.decorator';
+import { Payload } from '../auth/interfaces/auth.interface';
+import { DeactivateDto } from 'src/shared/dto/deactivate.dto';
 import { RequestUser } from '../auth/decorators/request-user.decorator';
 import { Payload } from '../auth/interfaces/auth.interface';
 
@@ -27,15 +31,15 @@ export class HealthProfessionalController {
     private readonly healthProfessionalService: HealthProfessionalService,
   ) {}
 
+  @Public()
   @Post()
-  @Roles([SystemRole.MANAGER])
   create(@Body() createHealthProfessionalDto: CreateHealthProfessionalDto) {
     return this.healthProfessionalService.create(createHealthProfessionalDto);
   }
 
   @Get()
   @Roles([SystemRole.HEALTH_PROFESSIONAL, SystemRole.RESEARCHER])
-  findAll(@Query() queryDto: QueryDto) {
+  findAll(@Query() queryDto: FindHealthProfessionalsQueryDto) {
     return this.healthProfessionalService.findAll(queryDto);
   }
 
@@ -61,8 +65,18 @@ export class HealthProfessionalController {
   @Delete(':id')
   @Roles([SystemRole.MANAGER])
   @ApiNoContentResponse()
-  remove(@Param('id') id: string) {
-    return this.healthProfessionalService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() dto: DeactivateDto,
+    @RequestUser() user: Payload,
+  ) {
+    return this.healthProfessionalService.remove(id, user.id, dto.reason);
+  }
+
+  @Patch(':id/reactivate')
+  @Roles([SystemRole.MANAGER])
+  reactivate(@Param('id') id: string, @RequestUser() user: Payload) {
+    return this.healthProfessionalService.reactivate(id, user.id);
   }
 
   @Post('link-participant')
